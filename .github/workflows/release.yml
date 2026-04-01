@@ -36,7 +36,8 @@ jobs:
           if [ "${{ matrix.cross }}" = "true" ]; then
             sudo dpkg --add-architecture armhf
             # Pin existing sources to amd64 only so they don't try to fetch armhf
-            sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
+            # Only modify lines that don't already have [arch=...]
+            sudo sed -i '/\[arch=/!s/^deb /deb [arch=amd64] /' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
             # Add armhf sources from ports.ubuntu.com
             echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble main universe" | sudo tee /etc/apt/sources.list.d/armhf.list
             echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe" | sudo tee -a /etc/apt/sources.list.d/armhf.list
