@@ -4,3 +4,4 @@ docs
 CLAUDE.md
 *.o
 sdh-proxy
+compose.yaml

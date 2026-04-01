@@ -1,0 +1,13 @@
+services:
+  sdh-proxy:
+    image: ghcr.io/slgfire/service-discovery-helper:latest
+    container_name: sdh-proxy
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./sdh-proxy.conf:/etc/sdh-proxy.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pidof sdh-proxy || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

@@ -186,6 +186,14 @@ docker run -d --net=host \
 
 Requires `--net=host` for access to the host's network interfaces. Mount your config file to `/etc/sdh-proxy.conf`.
 
+Or use Docker Compose (`compose.yaml` is included in the repo):
+
+```bash
+cp sdh-proxy.conf.example sdh-proxy.conf
+# Edit sdh-proxy.conf to match your setup
+docker compose up -d
+```
+
 Multi-arch images are available for x86_64, ARM64, and ARM 32-bit.
 
 ## 📊 Stat Logging
