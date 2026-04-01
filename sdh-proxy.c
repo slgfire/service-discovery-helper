@@ -171,8 +171,8 @@ void writeLogStats()
         fprintf(fp,"## IFACE STATS\n");
         for (int i = 0; i < num_ifaces; i++)
           fprintf(fp,"%s:%ld\n",iface_list[i], (long) iface_data[i].num_packets);
-      } 
-      fclose(fp);
+        fclose(fp);
+      }
       logtimer = (int)time(NULL);
     }
 }
@@ -366,7 +366,7 @@ int use_all_pcap_ints()
           && strstr(currentdev->name, "usb") == NULL)
       {
         printf("Detected and using interface: %s\n", currentdev->name);
-        iface_list[num_ifaces] = malloc(strlen(currentdev->name));
+        iface_list[num_ifaces] = malloc(strlen(currentdev->name) + 1);
         strcpy(iface_list[num_ifaces], currentdev->name);
         num_ifaces++;
       }
@@ -441,8 +441,10 @@ int parse_file(FILE * in, char * dest[], int * offset)
  * */
 char * generate_filter_string(char * portlist[], int numports)
 {
-  // Giant string since we may might possibly have a fuck tonne of ports. 
-  char *  ret = malloc(10000);
+  // Each port entry needs at most "portrange XXXXX-XXXXX or " = ~30 chars
+  // Plus the prefix (~42 chars) and closing bracket
+  size_t bufsize = 50 + (size_t)numports * 30;
+  char *  ret = malloc(bufsize);
   char tmpstr[50] = "";
   char * end; // points to the end of the filter string
 
