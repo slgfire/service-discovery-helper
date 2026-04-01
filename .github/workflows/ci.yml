@@ -33,6 +33,8 @@ jobs:
           sudo apt-get update
           if [ "${{ matrix.cross }}" = "true" ]; then
             sudo dpkg --add-architecture armhf
+            echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble main universe" | sudo tee /etc/apt/sources.list.d/armhf.list
+            echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe" | sudo tee -a /etc/apt/sources.list.d/armhf.list
             sudo apt-get update
             sudo apt-get install -y gcc-arm-linux-gnueabihf libpcap-dev:armhf
           else
