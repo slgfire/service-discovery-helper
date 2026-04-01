@@ -46,7 +46,7 @@ jobs:
 
       - name: Package
         run: |
-          tar czf sdh-proxy-linux-${{ matrix.arch }}.tar.gz sdh-proxy sdh-proxy.conf.example sdh-proxy.service ports interfaces GAMES.md README.md LICENSE
+          tar czf sdh-proxy-linux-${{ matrix.arch }}.tar.gz sdh-proxy config/sdh-proxy.conf.example deploy/sdh-proxy.service deploy/compose.yaml config/ports config/interfaces GAMES.md README.md LICENSE
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -128,6 +128,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: deploy/Dockerfile
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
           tags: |

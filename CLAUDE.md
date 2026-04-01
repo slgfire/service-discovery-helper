@@ -9,7 +9,7 @@ Service Discovery Helper (SDH) is a UDP broadcast forwarder written in C. It lis
 ## Build
 
 ```bash
-make                # builds sdh-proxy binary
+make                # builds sdh-proxy binary in repo root
 ```
 
 Requires `gcc`, `libpcap`, and `libpcap-dev`. No test suite exists.
@@ -17,31 +17,40 @@ Requires `gcc`, `libpcap`, and `libpcap-dev`. No test suite exists.
 ## Run
 
 ```bash
-sudo ./sdh-proxy -p ports -i interfaces [-r] [-t ms] [-l] [-d]
+sudo ./sdh-proxy -c config/sdh-proxy.conf.example    # config file
+sudo ./sdh-proxy -p config/ports -i config/interfaces -r    # legacy CLI flags
 ```
 
-Requires root (or pcap capture privileges). Use `-a` instead of `-i` to auto-detect all interfaces.
+Requires root (or pcap capture privileges).
+
+## Repository Structure
+
+```
+src/            C source code (sdh-proxy, timer, log, config)
+config/         Configuration files (ports, interfaces, sdh-proxy.conf.example)
+deploy/         Deployment files (Dockerfile, compose.yaml, sdh-proxy.service)
+lib/uthash/     Vendored header-only hash table library
+.github/        CI/CD workflows
+```
 
 ## Architecture
 
-The codebase is small (~850 lines across 4 source files):
+- **src/sdh-proxy.c / sdh-proxy.h** — Main program. Parses CLI args or config file, builds a BPF filter string from the port list, opens pcap handles per interface, and spawns one pthread per interface running `pcap_loop` → `flood_packet`. Signal handler (SIGTERM/SIGINT) triggers graceful shutdown via `do_exit` flag and `pcap_breakloop()`.
 
-- **sdh-proxy.c / sdh-proxy.h** — Main program. Parses CLI args, reads config files (`ports`, `interfaces`), builds a BPF filter string from the port list, opens pcap handles per interface, and spawns one pthread per interface running `pcap_loop` → `flood_packet`. The flood function copies each received broadcast and injects it on every other interface via `pcap_inject`.
+- **src/timer.c / timer.h** — Optional rate limiter. Uses a hash table (uthash) keyed on `{source IP, dest UDP port}` to track recently forwarded packets. A background purge thread cleans expired entries. Thread safety via `pthread_rwlock_t`.
 
-- **timer.c / timer.h** — Optional rate limiter. Uses a hash table (uthash) keyed on `{source IP, dest UDP port}` to track recently forwarded packets. A background purge thread cleans expired entries. Thread safety via `pthread_rwlock_t`.
+- **src/log.c / log.h** — Centralized logging with `sdh_log()`. Supports stdout (with timestamps) and syslog backends. Three levels: ERROR, INFO, DEBUG.
 
-- **uthash/** — Vendored header-only hash table library (Troy Hanson's uthash). Used only by timer.c.
+- **src/config.c / config.h** — INI-style config parser. Sections: `[interfaces]` (list), `[ports]` (list), `[settings]` (key=value).
 
-- **ports / interfaces** — Plain text config files, one entry per line. `#` for comments. Ports support ranges (`27015-27020`). See `GAMES.md` for tested game ports.
+- **lib/uthash/** — Vendored header-only hash table library (Troy Hanson's uthash). Used only by timer.
 
-## Key Constants (sdh-proxy.h)
+## Key Constants (src/sdh-proxy.h)
 
 - `MAX_IFACES 256`, `MAX_PORTS 2048` — static array limits
 - `SNAP_LEN 1540` — max packet capture length
-- Filter string buffer is hardcoded at 10000 bytes (`generate_filter_string`)
 
-## Known Issues
+## Branches
 
-- Segfault with very large port files (workaround: split into multiple files/instances)
-- Segfault if run without root privileges
-- `iface_list[num_ifaces] = malloc(strlen(...))` in `use_all_pcap_ints` is off-by-one (missing +1 for null terminator)
+- `master` — stable v1.x release
+- `v2.0` — v2.0 with config file, logging, signal handling, Docker, systemd

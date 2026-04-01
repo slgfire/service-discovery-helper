@@ -1,7 +1,6 @@
 .git
 .github
-docs
 CLAUDE.md
 *.o
 sdh-proxy
-compose.yaml
+deploy/compose.yaml
