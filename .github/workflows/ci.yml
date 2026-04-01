@@ -44,4 +44,4 @@ jobs:
           docker run --rm --platform ${{ matrix.platform }} \
             -v "${{ github.workspace }}:/src" -w /src \
             debian:bookworm-slim \
-            sh -c "apt-get update && apt-get install -y gcc make libpcap-dev && make && file sdh-proxy"
+            sh -c "apt-get update && apt-get install -y gcc make libpcap-dev file && make && file sdh-proxy"
