@@ -24,13 +24,34 @@ broadcast domain. But then game server discovery doesn't work!
 
 See GAMES.md for a list of tested games. 
 
+### Pre-built binaries
+
+Pre-built binaries for Linux x86_64, ARM64 (Raspberry Pi 4/5) and ARM 32-bit (Raspberry Pi 2/3/4) are available on the [Releases](https://github.com/slgfire/service-discovery-helper/releases) page.
+
+```bash
+tar xzf sdh-proxy-linux-*.tar.gz
+sudo apt install libpcap0.8   # runtime dependency
+# Edit 'ports' and 'interfaces' to match your setup
+sudo ./sdh-proxy -p ports -i interfaces -r
+```
+
 ### Requirements
 
-* Linux (or maybe BSD or other \*nix environment)
-* gcc or similar (apt-get install build-essential)
-* libpcap and libpcap-dev
-* Root privilges
+**To run (pre-built binary):**
+* Linux (x86_64, ARM64 or ARM 32-bit)
+* libpcap (`apt install libpcap0.8`)
+* Root privileges
 * 2 or more local network interfaces
+
+**To build from source (additionally):**
+* gcc or similar (`apt install build-essential`)
+* libpcap-dev (`apt install libpcap-dev`)
+
+### Building from source
+
+````
+make
+````
 
 ### Usage
 
@@ -41,7 +62,6 @@ Trunk all of your VLANs to a PC somewhere. (Consult switch documentation)
  sudo ip link add link eth0 name eth0.2 type vlan id 2
  # Repeat for each VLAN you have
  # Edit the configuration files (ports and interfaces are the defaults)
- make 
  sudo ./sdh-proxy [-p ports-file -i interfaces-file [-d] ] [-h] 
 ````
 
