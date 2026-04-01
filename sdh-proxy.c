@@ -31,6 +31,7 @@
 #include <arpa/inet.h>
 #include "timer.h"
 #include "log.h"
+#include "config.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -65,8 +66,10 @@ char * filter;
 // To do: put in conditions for things to exito n
 volatile sig_atomic_t do_exit = 0;
 
-// Toggled with -d on command line. Displays debug info. 
+// Toggled with -d on command line. Displays debug info.
 int debug = 0;
+
+char *config_file = NULL;
 
 // Toggled with -l on command line. Write Stats to stat.log
 int logstat = 0;
@@ -498,6 +501,8 @@ Usage:\n \
   -p ports-file: List of ports are read from ports-file. Port ranges\n \
                  can be specified by using a hyphen, eg 10-50 \n \
   -i interfaces-file: List of interfaces are read from interfaces-file.\n \
+  -c config-file: Load configuration from config-file.\n \
+                   Auto-loads /etc/sdh-proxy.conf if no flags given.\n \
   -a : Use all interfaces (ignores any interface files given) \n\
   -r : Enable rate limiting per source IP+destination UDP port combination\n \
   -t nnn : Set rate limiter to nnn ms. Defaults to 1000ms. Implies -r\n \
@@ -540,11 +545,6 @@ int main(int argc, char * argv[])
    * Begin processing command line arguments 
    * *****/
   
-  if (argc < 3)
-  {
-    printhelp();
-    exit(-1);
-  }
   // Read in arguments
   for (i = 1; i < argc; i++)
   {
@@ -634,6 +634,17 @@ int main(int argc, char * argv[])
     // -a, all interfaces
     else if (strcmp("-a", argv[i]) == 0)
       use_all_interfaces = 1;
+    // -c, config file
+    else if (strcmp("-c", argv[i]) == 0)
+    {
+      if (++i < argc)
+        config_file = argv[i];
+      else
+      {
+        sdh_log(SDH_LOG_ERROR, "-c specified, but no filename");
+        return -1;
+      }
+    }
     // -h, help
     else if (strcmp("-h", argv[i]) == 0)
       printhelp();
@@ -650,6 +661,30 @@ int main(int argc, char * argv[])
    * End processing command line options
    * *****/
 
+  // Auto-discover config if no -c given and nothing else configured
+  if (!config_file && num_ports == 0 && num_ifaces == 0 && !use_all_interfaces)
+  {
+      FILE *test = fopen("/etc/sdh-proxy.conf", "r");
+      if (test)
+      {
+          fclose(test);
+          config_file = "/etc/sdh-proxy.conf";
+          sdh_log(SDH_LOG_INFO, "Auto-detected config: /etc/sdh-proxy.conf");
+      }
+  }
+
+  if (config_file)
+  {
+      if (sdh_config_load(config_file) != 0)
+          return -1;
+  }
+
+  // Show help if still nothing configured
+  if (num_ports == 0 && num_ifaces == 0 && !use_all_interfaces)
+  {
+      printhelp();
+      return -1;
+  }
 
   // If we're using all interfaces, get PCAP to tell us what ifaces are available
   if (use_all_interfaces)
