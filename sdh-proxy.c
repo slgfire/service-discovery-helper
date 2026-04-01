@@ -30,6 +30,7 @@
 #include "sdh-proxy.h"
 #include <arpa/inet.h>
 #include "timer.h"
+#include "log.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -131,7 +132,7 @@ unsigned short int * udp_get_port( const short unsigned int pktlen, const u_char
   const u_char udp_hdr_length = 4* ( *(packet+ETH_HDR_LENGTH) & UDP_NUM_HEADERS_MASK );
   if ( udp_hdr_length > pktlen - ETH_HDR_LENGTH)
   {
-    fprintf(stderr, "Found packet that says it has more headers than the packet is long. ");
+    sdh_log(SDH_LOG_ERROR, "Found packet that says it has more headers than the packet is long.");
     return NULL;
   }
 
@@ -225,14 +226,12 @@ void flood_packet( u_char *source_iface, const struct pcap_pkthdr *header, const
     // Check if this packet hits the rate limiter
     if (timer_check_packet(srcipaddr, dstport) == SEND_PACKET)
     {
-      if (debug)
-        printf("SEND Packet port %hu addr %hhu.%hhu.%hhu.%hhu len %d bc %d.%d.%d.%d (RX: %ld TX: %ld DROP: %ld)\n", ntohs(*dstport), *(srcipaddr +0 ) , *(srcipaddr +1 ) , *(srcipaddr +2 ) , *(srcipaddr +3 ), header->len,sendpacket[30],sendpacket[31],sendpacket[32],sendpacket[33], (long) pkt_rx, (long) pkt_tx, (long) pkt_drop);
+      sdh_log(SDH_LOG_DEBUG, "SEND Packet port %hu addr %hhu.%hhu.%hhu.%hhu len %d bc %d.%d.%d.%d (RX: %ld TX: %ld DROP: %ld)", ntohs(*dstport), *(srcipaddr +0 ) , *(srcipaddr +1 ) , *(srcipaddr +2 ) , *(srcipaddr +3 ), header->len,sendpacket[30],sendpacket[31],sendpacket[32],sendpacket[33], (long) pkt_rx, (long) pkt_tx, (long) pkt_drop);
     }
     else
     {
       __sync_fetch_and_add(&pkt_drop, 1);
-      if (debug)
-        printf("DROP Packet port %hu addr %hhu.%hhu.%hhu.%hhu len %d\n", ntohs(*dstport), *(srcipaddr +0 ) , *(srcipaddr +1 ) , *(srcipaddr +2 ) , *(srcipaddr +3 ), header->len);
+      sdh_log(SDH_LOG_DEBUG, "DROP Packet port %hu addr %hhu.%hhu.%hhu.%hhu len %d", ntohs(*dstport), *(srcipaddr +0 ) , *(srcipaddr +1 ) , *(srcipaddr +2 ) , *(srcipaddr +3 ), header->len);
       // TODO: increment packet_drop_count on iface data
       return;
     }
@@ -282,7 +281,7 @@ void *  start_listening(void * args)
 {
   const interface_data * iface_data = (interface_data *)args;
 
-  printf("Thread spawned\n");
+  sdh_log(SDH_LOG_INFO, "Thread spawned");
   while (1)
   {
     if (do_exit) break;
@@ -302,31 +301,30 @@ pcap_t * init_pcap_int ( const char * interface, char * errbuf)
 {
   pcap_t * ret;
   struct bpf_program  fp;
-  if (debug)
-    printf("Opening PCAP interface for %s\n", interface);
+  sdh_log(SDH_LOG_DEBUG, "Opening PCAP interface for %s", interface);
 
   // Create the pcap_t
   ret = pcap_open_live(interface, SNAP_LEN, PROMISC, TIMEOUT, errbuf);
   if (ret == NULL)
   {
-    fprintf(stderr, "Error opening interface for listening");
+    sdh_log(SDH_LOG_ERROR, "Error opening interface for listening");
     return NULL;
   }
 
   // Compile the filter for this interface
   // enabled Optimize for Filter compile to avoid memory exception on big port lists
   if ( pcap_compile(ret, &fp, filter, 1, 0 ) == -1 ) {
-      fprintf(stderr, "Error compiling filter");
+      sdh_log(SDH_LOG_ERROR, "Error compiling filter");
       return NULL;
   }
   // Apply the filter
   if (pcap_setfilter(ret, &fp) != 0 ) {
-    fprintf(stderr, "Error setting filter");
+    sdh_log(SDH_LOG_ERROR, "Error setting filter");
     return NULL;
   }
   // Only listen to input traffic
   if (pcap_setdirection(ret, PCAP_D_IN) == -1) {
-    fprintf(stderr, "Error setting direction");
+    sdh_log(SDH_LOG_ERROR, "Error setting direction");
     return NULL;
   }
   return ret;
@@ -354,8 +352,8 @@ int use_all_pcap_ints()
     // Enumerate a list of all usable interfaces on the system
     if ( pcap_findalldevs( &firstdev, errbuf) == -1)
     {
-      fprintf(stderr, "There was an error opening all devices. Maybe you aren't root.\n");
-      fprintf(stderr, "%s\n", errbuf);
+      sdh_log(SDH_LOG_ERROR, "There was an error opening all devices. Maybe you aren't root.");
+      sdh_log(SDH_LOG_ERROR, "%s", errbuf);
       return (-1);
     }
   
@@ -367,7 +365,7 @@ int use_all_pcap_ints()
       if ( strstr(currentdev->name, "any") == NULL 
           && strstr(currentdev->name, "usb") == NULL)
       {
-        printf("Detected and using interface: %s\n", currentdev->name);
+        sdh_log(SDH_LOG_INFO, "Detected and using interface: %s", currentdev->name);
         iface_list[num_ifaces] = malloc(strlen(currentdev->name) + 1);
         strcpy(iface_list[num_ifaces], currentdev->name);
         num_ifaces++;
@@ -458,7 +456,7 @@ char * generate_filter_string(char * portlist[], int numports)
   // flood the network with DHCP and other lovely things. 
   if (numports < 1)
   {
-    fprintf(stderr, "No ports specified. Exiting to avoid a network flood.");
+    sdh_log(SDH_LOG_ERROR, "No ports specified. Exiting to avoid a network flood.");
     exit(-1);
   }
   end = ret + strlen(ret);
@@ -529,12 +527,14 @@ int main(int argc, char * argv[])
 
   if ( getuid() != 0 && geteuid() != 0)
   {
-    fprintf(stderr, "Not running program as root. Crashes and segfaults may result.\n");
+    sdh_log(SDH_LOG_ERROR, "Not running program as root. Crashes and segfaults may result.");
     fflush(stdout);
   }
 
   signal(SIGTERM, signal_handler);
   signal(SIGINT, signal_handler);
+  sdh_log_debug_enabled = debug;
+  sdh_log_init(0);
 
   /******
    * Begin processing command line arguments 
@@ -558,14 +558,14 @@ int main(int argc, char * argv[])
         portfile = fopen(filename, "rt");
         if ( portfile == NULL || parse_file(portfile, port_list, &num_ports) != 0)
         {
-          fprintf(stderr, "Error opening or parsing the ports list file, %s", filename);
+          sdh_log(SDH_LOG_ERROR, "Error opening or parsing the ports list file, %s", filename);
           return -1;
         }
         fclose(portfile);
       }
       else
       {
-        fprintf(stderr, "-p specified, but no filename\n");
+        sdh_log(SDH_LOG_ERROR, "-p specified, but no filename");
         return -1;
       }
 
@@ -581,14 +581,14 @@ int main(int argc, char * argv[])
         ifacefile = fopen(filename, "rt");
         if ( ifacefile == NULL || parse_file(ifacefile, iface_list, &num_ifaces) != 0)
         {
-          fprintf(stderr, "Error opening or parsing the interface list file, %s\n", filename);
+          sdh_log(SDH_LOG_ERROR, "Error opening or parsing the interface list file, %s", filename);
           return -1;
         }
         fclose(ifacefile);
       }
       else
       {
-        fprintf(stderr, "-i specified, but no filename\n");
+        sdh_log(SDH_LOG_ERROR, "-i specified, but no filename");
         return -1;
       }
     }
@@ -605,20 +605,19 @@ int main(int argc, char * argv[])
         unsigned int ms;
         if (sscanf(argv[i], "%u", &ms) == 0 || ms == 0)
         {
-          fprintf(stderr, "Specified -t but gave an unreadable input for it. Exiting.\n");
+          sdh_log(SDH_LOG_ERROR, "Specified -t but gave an unreadable input for it. Exiting.");
           return (-1);
         }
         if (ms < 100)
-          printf("Rate limiter time limit set very low (%ums). This is NOT advisable\n.", ms);
+          sdh_log(SDH_LOG_INFO, "Rate limiter time limit set very low (%ums). This is NOT advisable.", ms);
         pkt_timeout_s = ms / 1000;
         pkt_timeout_us = (ms - pkt_timeout_s*1000)*1000;
         timer_enabled =1;
-        if (debug)
-          printf("Set rate limiter to %us, %uus\n", pkt_timeout_s, pkt_timeout_us);
+        sdh_log(SDH_LOG_DEBUG, "Set rate limiter to %us, %uus", pkt_timeout_s, pkt_timeout_us);
       }
       else
       {
-        fprintf(stderr, "Specified -t but gave no extra argument. Exiting.\n");
+        sdh_log(SDH_LOG_ERROR, "Specified -t but gave no extra argument. Exiting.");
         return (-1);
       }
     }
@@ -640,7 +639,7 @@ int main(int argc, char * argv[])
       printhelp();
     else
     {
-      fprintf(stderr, "Unknown argument given. Exiting to avoid unexpected actions\n");
+      sdh_log(SDH_LOG_ERROR, "Unknown argument given. Exiting to avoid unexpected actions");
       printhelp();
       return -1;
     }
@@ -658,26 +657,24 @@ int main(int argc, char * argv[])
       return(-1);
   
 
-  if (debug) 
   {
-    printf("Ports being retransmitted:\n");
+    sdh_log(SDH_LOG_DEBUG, "Ports being retransmitted:");
     for (int i = 0; i < num_ports; i++)
-      printf("\t%s\n", port_list[i]);
-    printf("Interfaces being listend and transmitted on:\n");
+      sdh_log(SDH_LOG_DEBUG, "\t%s", port_list[i]);
+    sdh_log(SDH_LOG_DEBUG, "Interfaces being listend and transmitted on:");
     for (int i = 0; i < num_ifaces; i++)
-      printf("\t%s\n", iface_list[i]);
+      sdh_log(SDH_LOG_DEBUG, "\t%s", iface_list[i]);
   }
 
   if (num_ports == 0 || num_ifaces == 0)
   {
-    fprintf(stderr, "Either no ports or no interfaces specified. Nothing to do.\n");
+    sdh_log(SDH_LOG_ERROR, "Either no ports or no interfaces specified. Nothing to do.");
     return (-1);
   }
 
   // PCAP filter 
   filter = generate_filter_string(port_list, num_ports);
-  if (debug)
-    printf("Using filter:%s\n", filter);
+  sdh_log(SDH_LOG_DEBUG, "Using filter:%s", filter);
 
 
   iface_data = malloc( num_ifaces * sizeof(interface_data) );
@@ -691,7 +688,7 @@ int main(int argc, char * argv[])
     iface_data[i].pcap_int = init_pcap_int(iface_list[i], iface_data[i].pcap_errbuf );
     if (iface_data[i].pcap_int == NULL)
     {
-      fprintf(stderr, "Couldn't create a listener for all interfaces. Exiting. (%d)\n",i);
+      sdh_log(SDH_LOG_ERROR, "Couldn't create a listener for all interfaces. Exiting. (%d)",i);
       return -1;
     }
   }
@@ -740,5 +737,6 @@ int main(int argc, char * argv[])
   free(threads);
   free(filter);
 
+  sdh_log_cleanup();
   return 0;
 }

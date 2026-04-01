@@ -6,6 +6,7 @@
  */
 #include "timer.h"
 #include "sdh-proxy.h"
+#include "log.h"
 #include <pcap.h>
 #include <time.h>
 #include "uthash/uthash.h"
