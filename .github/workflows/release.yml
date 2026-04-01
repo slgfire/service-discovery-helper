@@ -57,3 +57,31 @@ jobs:
         with:
           generate_release_notes: true
           files: artifacts/**/*.tar.gz
+          body: |
+            ## Service Discovery Helper
+
+            UDP broadcast forwarder for game server discovery across VLANs.
+            Ideal for LAN parties with multiple network segments.
+
+            ### Downloads
+
+            | File | Architecture |
+            |------|-------------|
+            | `sdh-proxy-linux-x86_64.tar.gz` | Linux x86_64 (64-bit) |
+            | `sdh-proxy-linux-aarch64.tar.gz` | Linux ARM64 (Raspberry Pi, etc.) |
+
+            ### Quick Start
+
+            ```bash
+            tar xzf sdh-proxy-linux-*.tar.gz
+            # Edit 'ports' and 'interfaces' to match your setup
+            sudo ./sdh-proxy -p ports -i interfaces -r
+            ```
+
+            ### Requirements
+
+            - Linux with libpcap installed (`apt install libpcap0.8`)
+            - Root privileges
+            - 2 or more network interfaces
+
+            See [README.md](https://github.com/slgfire/service-discovery-helper/blob/master/README.md) for full documentation.
