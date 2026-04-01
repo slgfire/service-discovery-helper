@@ -1,0 +1,13 @@
+[Unit]
+Description=Service Discovery Helper - UDP broadcast forwarder
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sdh-proxy -c /etc/sdh-proxy.conf
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

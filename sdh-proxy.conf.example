@@ -1,0 +1,39 @@
+# Service Discovery Helper configuration
+# See README.md for full documentation
+
+[interfaces]
+# List one interface per line, or use 'auto' to detect all
+# auto
+eth0
+eth1
+
+[ports]
+# One port or port range per line
+# See GAMES.md for common game discovery ports
+
+# Source Engine (TF2, CS:GO, etc.)
+27015-27020
+27005
+
+# Warcraft 3
+6112
+
+# Steam
+26900-26905
+27036
+
+[settings]
+# Enable rate limiting (strongly recommended)
+rate_limit = yes
+
+# Rate limit timeout in milliseconds
+rate_limit_timeout = 1000
+
+# Log packet statistics to sdh.stat
+log_stats = no
+
+# Send logs to syslog instead of stdout
+syslog = no
+
+# Enable debug output
+debug = no
