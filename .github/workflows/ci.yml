@@ -12,14 +12,12 @@ jobs:
       matrix:
         include:
           - arch: x86_64
-            runner: ubuntu-latest
           - arch: aarch64
-            runner: ubuntu-24-arm
+            platform: linux/arm64
           - arch: armhf
-            runner: ubuntu-latest
             platform: linux/arm/v7
 
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
     name: Build (${{ matrix.arch }})
 
     steps:
@@ -28,8 +26,6 @@ jobs:
       - name: Set up QEMU
         if: matrix.platform
         uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm
 
       - name: Build (native)
         if: ${{ !matrix.platform }}
