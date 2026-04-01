@@ -68,7 +68,7 @@ void  * timer_purge_old_entries_loop(void * __unused)
 {
   pkt_t * s, * tmp;
   struct timeval now;
-  while (1)
+  while (!do_exit)
   {
     gettimeofday(&now, NULL);
     pthread_rwlock_wrlock(&timer_lock);

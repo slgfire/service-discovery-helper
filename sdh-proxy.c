@@ -37,6 +37,7 @@
 #include <pcap.h>
 #include <pthread.h>
 #include <ctype.h>
+#include <signal.h>
 
 // For getuid() and geteuid()
 #include <unistd.h>
@@ -510,6 +511,12 @@ Usage:\n \
   \n\n");
 }
 
+void signal_handler(int sig)
+{
+    (void)sig;
+    do_exit = 1;
+}
+
 /**
  * Sorry for the long main(). It just happened, okay?
  */
@@ -526,8 +533,10 @@ int main(int argc, char * argv[])
     fflush(stdout);
   }
 
+  signal(SIGTERM, signal_handler);
+  signal(SIGINT, signal_handler);
 
-  /****** 
+  /******
    * Begin processing command line arguments 
    * *****/
   
@@ -672,7 +681,7 @@ int main(int argc, char * argv[])
 
 
   iface_data = malloc( num_ifaces * sizeof(interface_data) );
-  threads = malloc (num_ifaces * sizeof(pthread_t));
+  threads = malloc ((num_ifaces + 1) * sizeof(pthread_t));
   
 
   // Create all of the interface listeners
@@ -701,11 +710,35 @@ int main(int argc, char * argv[])
   if(timer_enabled)
     pthread_create(&threads[i++], NULL,timer_purge_old_entries_loop, NULL); 
 
-  // Wait for all threads to finish before exiting
-  for (i = 0; i< num_ifaces; i++)
+  // Wait until do_exit is set (by signal handler)
+  while (!do_exit)
+      sleep(1);
+
+  // Break all pcap loops so threads can exit
+  for (i = 0; i < num_ifaces; i++)
+      pcap_breakloop(iface_data[i].pcap_int);
+
+  // Join all worker threads
+  for (i = 0; i < num_ifaces; i++)
+      pthread_join(threads[i], NULL);
+
+  // Join purge thread if it was started
+  if (timer_enabled)
+      pthread_join(threads[num_ifaces], NULL);
+
+  // Final stat flush
+  if (logstat)
   {
-    pthread_join(threads[i], NULL);
+      logtimer = 0;
+      writeLogStats();
   }
+
+  // Cleanup
+  for (i = 0; i < num_ifaces; i++)
+      pcap_close(iface_data[i].pcap_int);
+  free(iface_data);
+  free(threads);
+  free(filter);
 
   return 0;
 }
