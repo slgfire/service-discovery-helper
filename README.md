@@ -138,20 +138,24 @@ CLI flags override config file values, so you can use a config as baseline and o
 sudo ./sdh-proxy -c /etc/sdh-proxy.conf -d    # config + debug mode
 ```
 
-Example config (`sdh-proxy.conf.example` is included in releases):
+The config file uses a simple section-based format (`sdh-proxy.conf.example` is included in releases):
 
 ```ini
 [interfaces]
+# List your network interfaces, one per line
+# Use 'auto' to detect all interfaces automatically
 eth0.100
 eth0.101
 eth0.102
-# or use: auto
 
 [ports]
-27015-27020    # Source Engine
+# List UDP ports or port ranges to forward, one per line
+# See GAMES.md for common game discovery ports
+27015-27020    # Source Engine (TF2, CS:GO, etc.)
 6112           # Warcraft 3
 
 [settings]
+# Key = value pairs for runtime options
 rate_limit = yes
 rate_limit_timeout = 750
 log_stats = no
@@ -159,7 +163,15 @@ syslog = no
 debug = no
 ```
 
-Note: The `[interfaces]` and `[ports]` sections use a list format (one entry per line) rather than key=value pairs, consistent with the existing ports/interfaces file format.
+The file has three sections:
+
+| Section | Format | Description |
+|---------|--------|-------------|
+| `[interfaces]` | One entry per line | Network interfaces to listen on, or `auto` |
+| `[ports]` | One entry per line | UDP ports/ranges to forward (e.g. `27015` or `27015-27020`) |
+| `[settings]` | `key = value` | Runtime settings (`yes`/`no` for booleans, integers for timeouts) |
+
+Lines starting with `#` are comments. The `[interfaces]` and `[ports]` sections are simple lists (one entry per line), while `[settings]` uses `key = value` pairs.
 
 ## 🔄 Running as a Service
 
