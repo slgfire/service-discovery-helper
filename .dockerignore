@@ -1,0 +1,6 @@
+.git
+.github
+docs
+CLAUDE.md
+*.o
+sdh-proxy
