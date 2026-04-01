@@ -158,11 +158,6 @@ This is a fork of [SirSquidness/service-discovery-helper](https://github.com/Sir
 - **CI/CD:** GitHub Actions workflows for automated builds on x86_64, ARM64 and ARM 32-bit
 - **Releases:** Pre-built binaries available for download
 
-## 🏟️ Used At
-
-- **PAX Aus 2016** — PC gaming area
-- **DreamHack Germany 2017** — 1,500 users on the LAN
-
 ## 📄 License
 
 [MIT](LICENSE) — (c) Chris "SirSquidness" Holman, 2013
