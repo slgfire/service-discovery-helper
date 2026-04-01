@@ -13,14 +13,11 @@ jobs:
         include:
           - arch: x86_64
             runner: ubuntu-latest
-            cc: gcc
           - arch: aarch64
             runner: ubuntu-24-arm
-            cc: gcc
           - arch: armhf
             runner: ubuntu-latest
-            cc: arm-linux-gnueabihf-gcc
-            cross: true
+            platform: linux/arm/v7
 
     runs-on: ${{ matrix.runner }}
     name: Build (${{ matrix.arch }})
@@ -28,25 +25,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Set up QEMU
+        if: matrix.platform
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm
+
+      - name: Build (native)
+        if: ${{ !matrix.platform }}
         run: |
-          sudo apt-get update
-          if [ "${{ matrix.cross }}" = "true" ]; then
-            sudo dpkg --add-architecture armhf
-            # Pin existing sources to amd64 only so they don't try to fetch armhf
-            # Only modify lines that don't already have [arch=...]
-            sudo sed -i '/\[arch=/!s/^deb /deb [arch=amd64] /' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
-            # Add armhf sources from ports.ubuntu.com
-            echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble main universe" | sudo tee /etc/apt/sources.list.d/armhf.list
-            echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe" | sudo tee -a /etc/apt/sources.list.d/armhf.list
-            sudo apt-get update
-            sudo apt-get install -y gcc-arm-linux-gnueabihf libpcap-dev:armhf
-          else
-            sudo apt-get install -y libpcap-dev
-          fi
+          sudo apt-get update && sudo apt-get install -y libpcap-dev
+          make
+          file sdh-proxy
 
-      - name: Build
-        run: make CC=${{ matrix.cc }}
-
-      - name: Verify binary
-        run: file sdh-proxy
+      - name: Build (cross via Docker)
+        if: matrix.platform
+        run: |
+          docker run --rm --platform ${{ matrix.platform }} \
+            -v "${{ github.workspace }}:/src" -w /src \
+            debian:bookworm-slim \
+            sh -c "apt-get update && apt-get install -y gcc make libpcap-dev && make && file sdh-proxy"
