@@ -66,6 +66,7 @@ sudo ./sdh-proxy [-p ports-file] [-i interfaces-file] [-a] [-r] [-t ms] [-l] [-d
 | `-a` | Auto-detect and use all interfaces |
 | `-r` | Enable rate limiting per source IP + destination port |
 | `-t <ms>` | Rate limiter timeout in ms (default: 1000, implies `-r`) |
+| `-c <file>` | Load configuration from file (auto-loads `/etc/sdh-proxy.conf` if no flags given) |
 | `-l` | Enable stat logging to `sdh.stat` |
 | `-d` | Debug output |
 | `-h` | Show help |
@@ -121,6 +122,72 @@ Each packet's source IP + destination port pair is tracked. If the same combinat
 
 The default timeout of 1000ms is a safe starting point. DreamHack Germany ran 1,500 users successfully with `-t 750`.
 
+## ⚙️ Configuration File
+
+Instead of passing multiple CLI flags, you can use a single config file:
+
+```bash
+sudo ./sdh-proxy -c /etc/sdh-proxy.conf
+```
+
+If no flags are given, SDH automatically looks for `/etc/sdh-proxy.conf`.
+
+CLI flags override config file values, so you can use a config as baseline and override specific settings:
+
+```bash
+sudo ./sdh-proxy -c /etc/sdh-proxy.conf -d    # config + debug mode
+```
+
+Example config (`sdh-proxy.conf.example` is included in releases):
+
+```ini
+[interfaces]
+eth0.100
+eth0.101
+eth0.102
+# or use: auto
+
+[ports]
+27015-27020    # Source Engine
+6112           # Warcraft 3
+
+[settings]
+rate_limit = yes
+rate_limit_timeout = 750
+log_stats = no
+syslog = no
+debug = no
+```
+
+Note: The `[interfaces]` and `[ports]` sections use a list format (one entry per line) rather than key=value pairs, consistent with the existing ports/interfaces file format.
+
+## 🔄 Running as a Service
+
+Install and enable as a systemd service:
+
+```bash
+sudo make install
+# Edit /etc/sdh-proxy.conf to match your setup
+sudo systemctl daemon-reload
+sudo systemctl enable --now sdh-proxy
+```
+
+Check status: `sudo systemctl status sdh-proxy`
+
+View logs: `journalctl -u sdh-proxy -f`
+
+## 🐳 Docker
+
+```bash
+docker run -d --net=host \
+  -v /path/to/your/sdh-proxy.conf:/etc/sdh-proxy.conf \
+  ghcr.io/slgfire/service-discovery-helper:latest
+```
+
+Requires `--net=host` for access to the host's network interfaces. Mount your config file to `/etc/sdh-proxy.conf`.
+
+Multi-arch images are available for x86_64, ARM64, and ARM 32-bit.
+
 ## 📊 Stat Logging
 
 Enable with `-l` to write packet statistics to `sdh.stat`. Use [this script](https://gist.github.com/solariz/29362abbcf45605ab700df6f6e6be141) to ingest the data into InfluxDB.
@@ -157,6 +224,13 @@ This is a fork of [SirSquidness/service-discovery-helper](https://github.com/Sir
 - **Bugfix:** Filter string buffer dynamically sized instead of hardcoded 10KB — fixes segfault with large port lists
 - **CI/CD:** GitHub Actions workflows for automated builds on x86_64, ARM64 and ARM 32-bit
 - **Releases:** Pre-built binaries available for download
+- **Config file:** Single config file support (`-c` flag) with auto-discovery of `/etc/sdh-proxy.conf`
+- **Graceful shutdown:** Signal handler for clean SIGTERM/SIGINT shutdown
+- **Thread safety:** Atomic operations for packet counters
+- **Centralized logging:** Log levels (ERROR/INFO/DEBUG) with stdout and syslog backends
+- **Systemd:** Service file for running as a system daemon
+- **Docker:** Multi-arch container image on GitHub Container Registry
+- **Makefile:** `make install` / `make uninstall` targets
 
 ## 📄 License
 
