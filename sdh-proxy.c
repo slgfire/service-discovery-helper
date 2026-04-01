@@ -190,7 +190,7 @@ void flood_packet( u_char *source_iface, const struct pcap_pkthdr *header, const
 {
   int i;
   u_char * sendpacket;
-  pkt_rx += 1;
+  __sync_fetch_and_add(&pkt_rx, 1);
   sendpacket = malloc(header->len);
   // This memcpy is only to let me experiment with modifying the packet. 
   // Not neccessary if not modifying packet, but easier to leave here. 
@@ -216,7 +216,7 @@ void flood_packet( u_char *source_iface, const struct pcap_pkthdr *header, const
 
     if (logstat) {
         // some Port Statistics for each port
-        pkt_stats[ntohs(*dstport)] += 1; 
+        __sync_fetch_and_add(&pkt_stats[ntohs(*dstport)], 1);
         // writing some logfile stats.
         writeLogStats();
     }
@@ -229,7 +229,7 @@ void flood_packet( u_char *source_iface, const struct pcap_pkthdr *header, const
     }
     else
     {
-      pkt_drop += 1;
+      __sync_fetch_and_add(&pkt_drop, 1);
       if (debug)
         printf("DROP Packet port %hu addr %hhu.%hhu.%hhu.%hhu len %d\n", ntohs(*dstport), *(srcipaddr +0 ) , *(srcipaddr +1 ) , *(srcipaddr +2 ) , *(srcipaddr +3 ), header->len);
       // TODO: increment packet_drop_count on iface data
@@ -260,10 +260,10 @@ void flood_packet( u_char *source_iface, const struct pcap_pkthdr *header, const
     }
     else
     {
-      iface_data[i].num_packets++;
+      __sync_fetch_and_add(&iface_data[i].num_packets, 1);
     }
   }
-  pkt_tx += 1;
+  __sync_fetch_and_add(&pkt_tx, 1);
 
   // we only malloc() this if we're modifying the frame
   //if (do_network_rewrite>0)   // malloc() moved outisde conditional above
