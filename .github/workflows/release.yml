@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+            cc: gcc
+          - arch: aarch64
+            runner: ubuntu-24-arm
+            cc: gcc
+
+    runs-on: ${{ matrix.runner }}
+    name: Build (${{ matrix.arch }})
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libpcap-dev
+
+      - name: Build
+        run: make CC=${{ matrix.cc }}
+
+      - name: Package
+        run: |
+          tar czf sdh-proxy-linux-${{ matrix.arch }}.tar.gz sdh-proxy ports interfaces GAMES.md README.md LICENSE
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdh-proxy-linux-${{ matrix.arch }}
+          path: sdh-proxy-linux-${{ matrix.arch }}.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: artifacts/**/*.tar.gz

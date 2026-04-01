@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+            cc: gcc
+          - arch: aarch64
+            runner: ubuntu-24-arm
+            cc: gcc
+
+    runs-on: ${{ matrix.runner }}
+    name: Build (${{ matrix.arch }})
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libpcap-dev
+
+      - name: Build
+        run: make CC=${{ matrix.cc }}
+
+      - name: Verify binary
+        run: file sdh-proxy
