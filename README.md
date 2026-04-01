@@ -1,185 +1,164 @@
+<div align="center">
+  <img src="logo.svg" alt="service-discovery-helper" width="256"/>
 
+  [![Build](https://img.shields.io/github/actions/workflow/status/slgfire/service-discovery-helper/ci.yml?branch=master)](https://github.com/slgfire/service-discovery-helper/actions)
+  [![Release](https://img.shields.io/github/v/release/slgfire/service-discovery-helper)](https://github.com/slgfire/service-discovery-helper/releases)
+  [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-# Service Discovery Helper
-##### A UDP Broadcast forwarder 
-##### (c) Chris Holman, 2013
+  **📡 UDP broadcast forwarder that makes game server discovery work across VLANs — built for LAN parties**
 
-If you operate a network with more than one VLAN or LAN segment, then UDP broadcast discovery won't 
-*just work* across your entire network. Enter, Service Discovery Helper (SDH).
+  [Releases](https://github.com/slgfire/service-discovery-helper/releases) · [Game Compatibility](GAMES.md)
+</div>
 
-Many programs use UDP broadcasts to discover their servers/peers. SDH forwards these UDP broadcasts between 
-networks, enabling discovery functionality where it would not usually work.
+---
 
-SDH will listen on the specified network interfaces for UDP broadcasts on specified
-ports and retransmit the packets on remaining network interfaces. It uses a whitelist
-for UDP ports that it will forward, so you can be sure that you will not
-accidentally forward DHCP or SSDP to every other VLAN. 
+## Overview
 
-The use case that inspired this tool is large LAN parties, where you may have hundreds
-(or thousands!) of PCs on one network. Operating this many PCs on one broadcast domain 
-introduces a number of issues, and is considered probably not the best practice. 
-The normal solution to this is to segment the network in to a number of 
-VLANs on their own subnet, such that there are a much smaller number of PCs in one 
-broadcast domain. But then game server discovery doesn't work!
+Running a LAN party with hundreds of PCs on one broadcast domain doesn't scale. The solution is VLANs — but then game server discovery breaks, because UDP broadcasts don't cross VLAN boundaries.
 
-See GAMES.md for a list of tested games. 
+**service-discovery-helper** (SDH) fixes this. It listens for UDP broadcasts on whitelisted ports and retransmits them across your network interfaces. Game clients send discovery broadcasts, SDH forwards them to every other VLAN, and servers respond directly via unicast. Your game traffic stays untouched.
+
+## ✨ Features
+
+- **Selective forwarding** — only whitelisted UDP ports are forwarded, no accidental DHCP or SSDP leaks
+- **Rate limiting** — optional per-source-IP+port rate limiter prevents broadcast storms and loops
+- **Multi-architecture** — pre-built binaries for x86_64, ARM64 and ARM 32-bit (Raspberry Pi)
+- **Auto-detect interfaces** — use `-a` to listen on all available network interfaces
+- **Stat logging** — optional packet statistics to file for InfluxDB ingestion
+- **Lightweight** — single binary, no dependencies beyond libpcap
+
+## 🚀 Quick Start
 
 ### Pre-built binaries
 
-Pre-built binaries for Linux x86_64, ARM64 (Raspberry Pi 4/5) and ARM 32-bit (Raspberry Pi 2/3/4) are available on the [Releases](https://github.com/slgfire/service-discovery-helper/releases) page.
+Download from the [Releases page](https://github.com/slgfire/service-discovery-helper/releases):
+
+| File | Architecture |
+|------|-------------|
+| `sdh-proxy-linux-x86_64.tar.gz` | Linux x86_64 (64-bit) |
+| `sdh-proxy-linux-aarch64.tar.gz` | Linux ARM64 (Raspberry Pi 4/5, 64-bit OS) |
+| `sdh-proxy-linux-armhf.tar.gz` | Linux ARM 32-bit (Raspberry Pi 2/3/4, 32-bit OS) |
 
 ```bash
 tar xzf sdh-proxy-linux-*.tar.gz
-sudo apt install libpcap0.8   # runtime dependency
-# Edit 'ports' and 'interfaces' to match your setup
+sudo apt install libpcap0.8       # runtime dependency (all platforms)
 sudo ./sdh-proxy -p ports -i interfaces -r
 ```
 
-### Requirements
+### Build from source
 
-**To run (pre-built binary):**
-* Linux (x86_64, ARM64 or ARM 32-bit)
-* libpcap (`apt install libpcap0.8`)
-* Root privileges
-* 2 or more local network interfaces
-
-**To build from source (additionally):**
-* gcc or similar (`apt install build-essential`)
-* libpcap-dev (`apt install libpcap-dev`)
-
-### Building from source
-
-````
+```bash
+sudo apt install build-essential libpcap-dev
 make
-````
+sudo ./sdh-proxy -p ports -i interfaces -r
+```
 
-### Usage
+## ⚙️ Usage
 
-Trunk all of your VLANs to a PC somewhere. (Consult switch documentation)
+```
+sudo ./sdh-proxy [-p ports-file] [-i interfaces-file] [-a] [-r] [-t ms] [-l] [-d] [-h]
+```
 
-````
- sudo modprobe 8021q
- sudo ip link add link eth0 name eth0.2 type vlan id 2
- # Repeat for each VLAN you have
- # Edit the configuration files (ports and interfaces are the defaults)
- sudo ./sdh-proxy [-p ports-file -i interfaces-file [-d] ] [-h] 
-````
+| Flag | Description |
+|------|-------------|
+| `-p <file>` | Port whitelist file (can be specified multiple times) |
+| `-i <file>` | Interface list file (can be specified multiple times) |
+| `-a` | Auto-detect and use all interfaces |
+| `-r` | Enable rate limiting per source IP + destination port |
+| `-t <ms>` | Rate limiter timeout in ms (default: 1000, implies `-r`) |
+| `-l` | Enable stat logging to `sdh.stat` |
+| `-d` | Debug output |
+| `-h` | Show help |
 
+### Configuration files
 
-*  -p ports-file: List of ports are read from ports-file. Port ranges
-     can be specified by using a hyphen, eg 10-50
-*  -i interfaces-file: List of interfaces are read from interfaces-file.
-*  -a : Listen on all PCAP supported interfaces (except USB and "any")
-*  -r : Enable rate limiting per source IP+destination UDP port combination
-*  -t nnn : Set rate limiter to nnn ms. Defaults to 1000ms. Implies -r
-*  -l : Turns on Stat logging (log RX/TX/DROP Packets to stats.log)
-*  -d : Turns on debug (doesn't do much yet
-*  -h : Shows this help
+**`ports`** — one port or port range per line, `#` for comments:
 
-Multiple port or interface files can be specified. 
+```
+# Source Engine (TF2, CS:GO, etc.)
+27015-27020
 
-Example port and interface files are given. 
+# Warcraft 3
+6112
+```
 
-Only **one** instance of SDH should run on each VLAN. If more than one instance is run on the same PC, broadcasts will be retransmitted *n* times. If more than one copy is run on more than one PC, and there are shared VLANs, a broadcast loop and flood **will** happen. 
+**`interfaces`** — one interface name per line:
 
-Rate limiting can be enabled with a command line flag. It is **strongly** recommended that you enable this, unless you're 100% confident that you know what you're doing and you won't accidentally cause a loop. See below for a brief rate limting explanation. 
+```
+eth0
+eth0.100
+eth0.101
+```
 
-*Important information regarding a segault:* if run the application and you get crash on start, try splitting your ports file up in to multiple files and running multiple instances of SDH. This bug needs some love, but the workaround is simple .
+See [GAMES.md](GAMES.md) for a full list of tested games and their discovery ports.
 
-### Advanced usage
+### Example setup
 
-If you do not want to trunk every VLAN to one point on your network, you may
-create a bridging VLAN and run multiple instances of SDH. Consider the bridging
-VLAN is 100, and the user networks are VLANs 101, 102, 103 and 104. Run two
-instances of SDH, one connected to VLANs 100, 101 and 102, and the second 
-instance connected to VLANs 100, 103 and 104. Packets broadcast on to the bridging VLAN 
-will be rebroadcast again by other instances of SDH. The bridging VLAN could also 
-be a VPN or similar. 
+Trunk your VLANs to a dedicated PC, create the sub-interfaces, then run SDH:
 
-### Rate limiting
+```bash
+sudo modprobe 8021q
+sudo ip link add link eth0 name eth0.100 type vlan id 100
+sudo ip link add link eth0 name eth0.101 type vlan id 101
+sudo ip link add link eth0 name eth0.102 type vlan id 102
+sudo ./sdh-proxy -p ports -a -r -t 750
+```
 
-Rate limiting is an optional feature that can be used for mostly-effective 
-damage control in the event of a network loop, and preventing spammy
-programs from affecting your entire network. 
+### Advanced: bridging VLANs
 
-Every packet that is considered for retransmission has its source IP address
-and destination UDP port compared to a list of recent packets. If that same pair of 
-source IP and destination port have been retransmitted within the last timeout 
-period, then the packet is dropped. 
+If you can't trunk every VLAN to one point, create a bridging VLAN and run multiple SDH instances. For example, with bridging VLAN 100 and user VLANs 101-104:
 
-The use of this combination means that when, eg, the Steam server browser 
-sends broadcasts on each of ports 27015 to 27020, it will not trigger the 
-rate limiter. But, if there is a network loop or a very spammy program, 
-the same IP+port combination will be seen many times in a short period, 
-and the rate limiter will drop all but 1 instance of the packet in every
-timeout period. 
+- Instance 1: VLANs 100, 101, 102
+- Instance 2: VLANs 100, 103, 104
 
-The default timeout is 1000ms, which is more than enough to prevent a loop from 
-forming if the circumstances for it to happen arise, and is small enough that 
-it should not interfere with any legitimate discovery applications. 
+Packets broadcast onto VLAN 100 get rebroadcast by the other instance.
 
-### Stat collection
+## 🛡️ Rate Limiting
 
-Enable the `-l` flag to enable logging of statistics to a file. Then 
-[use this script](https://gist.github.com/solariz/29362abbcf45605ab700df6f6e6be141)
-to ingest the data in to InfluxDB.
+Rate limiting is **strongly recommended**. It prevents broadcast storms if a loop forms and throttles spammy applications.
 
-Thanks to Solariz from DreamHack for this feature!
+Each packet's source IP + destination port pair is tracked. If the same combination was forwarded within the timeout window, the duplicate is dropped. This means legitimate multi-port discovery (e.g., Steam scanning ports 27015-27020) works fine, while loops or floods are contained.
 
+The default timeout of 1000ms is a safe starting point. DreamHack Germany ran 1,500 users successfully with `-t 750`.
 
-### What SDH *does* do 
+## 📊 Stat Logging
 
-1. Copy/retransmit ethernet frames containing UDP broadcast packets on whitelisted ports between network interfaces
-2. Optionally enforce a rate limit to prevent a network flood in the case of a loop
+Enable with `-l` to write packet statistics to `sdh.stat`. Use [this script](https://gist.github.com/solariz/29362abbcf45605ab700df6f6e6be141) to ingest the data into InfluxDB.
 
-### What SDH *does not* do
+## 🎮 Tested Games
 
-1. Routing. This is not a router. Your non-UDP-broadcast IP traffic will still need a normal router to move between LAN segments. 
-2. Ethernet bridging. I guess technically it could be considered an ethernet bridge, but only one that 
-forwards very incredibly selectively. 
-3. Intelligent retransmission decisions. A malicious user could flood your network with targetted traffic. A future feature could be a rate limiter to avoid flooding a gigabit of traffic across the network. 
-4. Source verification. Neither source IP or MAC address are verified. A future feature could be to ensure that the source IP address is within the subnet of the interface it was detected on, but this would prevent multi-hop broadcasts. 
+| Game | Status | Ports |
+|------|--------|-------|
+| Source Engine (TF2, CS:S, CS:GO) | ✅ Works | 27015-27020 |
+| Warcraft 3 / Frozen Throne | ✅ Works | 6112 |
+| Trackmania / Shootmania | ✅ Works | 2350-2360 |
+| Unreal Tournament 2004 | ✅ Works | 10777 |
+| ARMA 2 / DayZ | ✅ Works | 2302-2470 |
+| Warsow | ✅ Works | 44400 |
+| FlatOut 2 | ✅ Works | 23757 |
+| Blur | ✅ Works | 50001 |
+| OpenTTD | ❌ Not working | 3979 |
 
-The most important bit out of that is: this tool does not carry your game/application traffic. 
-Broadcasts are (usually) only used for network announcement and discovery. Your game client 
-will send a discovery broadcast packet (ie, host to everyone), which SDH will retransmit. The game server will reply with a 
-unicast (ie, host to host). Unicast is not broadcast, and will not be retransmitted by SDH. The unicast packets will go via the path they would have if SDH was not running. 
+Full details in [GAMES.md](GAMES.md).
 
-### What problems might SDH not fix?
+## ⚠️ Important Notes
 
-Your program might have a serious case of the bad programmer, and cannot deal with "LAN" clients being on different subnets.
+- Only **one** SDH instance per VLAN. Multiple instances on shared VLANs **will** cause a broadcast loop.
+- SDH only forwards broadcasts — your game/application traffic (unicast) routes normally through your existing infrastructure.
+- Requires root privileges for packet capture and injection.
+- Source IP and MAC addresses are not verified. Use rate limiting in untrusted environments.
 
+## 🏟️ Used At
 
-### What has this been used for?
+- **PAX Aus 2016** — PC gaming area
+- **DreamHack Germany 2017** — 1,500 users on the LAN
 
-**PAX Aus 2016 PC area**
->We _finally_ used this at an event - PAX Aus 2016 PC area. 
->
->it seemed to work pretty well. One VLAN apparently had some trouble discovering servers, but I did not get to investigate at the time, >so can't rule out individual PC problems, switch misconfiguration or bug in the application. 
+## 📄 License
 
-**DREAMHACK Ger 2016 LAN area**
-> We used it at DHDE17 too. 1.500 users run very well on a enabled rate limiting at -t 750.
-> Tested and added several games to the ports, after adding a bunch of ports the SDH crashed on memory exhaust but could be fixed by enabling the pcap optimized compile in code.
+[MIT](LICENSE) — (c) Chris "SirSquidness" Holman, 2013
 
+---
 
-### To do list
-
-* Detect whether the broadcast is going to 255.255.255.255 or to the last 
-address in the subnet (eg, 10.0.0.255). If the latter, rewrite the address 
-for the new subnet. Current implementation leaves address as is. Means it
-only works if it gets sent to 255.255.255.255. Making this change would 
-require either detection or configuration of what IP range each interface
-used.
-* Not segfaulting if not run with libpcap capture permissions (eg, root)
-* Fix segfault when providing a large ports file
-
-Ideas for someone who might find them useful to implement:
-* Verify sender by ARP before retransmitting a frame
-* Detect loops by watching for duplicate frames from the same source (this may be problematic, as some applications generate identical frames every time)
-
-
-### License
-
-Published under the MIT license. See LICENSE for licensing information. Please email me if you use this, I'd love to know <3
-
-
+<div align="center">
+  <sub>⭐ Star this repo if SDH saved your LAN party!</sub>
+</div>
