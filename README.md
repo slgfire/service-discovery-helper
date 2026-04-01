@@ -148,6 +148,16 @@ Full details in [GAMES.md](GAMES.md).
 - Requires root privileges for packet capture and injection.
 - Source IP and MAC addresses are not verified. Use rate limiting in untrusted environments.
 
+## 🔧 Changes from the original
+
+This is a fork of [SirSquidness/service-discovery-helper](https://github.com/SirSquidness/service-discovery-helper). Changes made:
+
+- **Bugfix:** `fclose()` crash when stat log file couldn't be opened
+- **Bugfix:** Off-by-one memory allocation when auto-detecting interfaces (`-a`), could cause memory corruption
+- **Bugfix:** Filter string buffer dynamically sized instead of hardcoded 10KB — fixes segfault with large port lists
+- **CI/CD:** GitHub Actions workflows for automated builds on x86_64, ARM64 and ARM 32-bit
+- **Releases:** Pre-built binaries available for download
+
 ## 🏟️ Used At
 
 - **PAX Aus 2016** — PC gaming area
