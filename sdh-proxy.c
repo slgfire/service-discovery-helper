@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <pcap.h>
 #include <pthread.h>
 #include <ctype.h>
@@ -60,7 +61,7 @@ int num_ports = 0;
 char * filter;
 
 // To do: put in conditions for things to exito n
-int do_exit = 0;
+volatile sig_atomic_t do_exit = 0;
 
 // Toggled with -d on command line. Displays debug info. 
 int debug = 0;
@@ -75,7 +76,7 @@ int do_network_rewrite = 0; // Rewrite IP broadcast address for the new
 int64_t pkt_rx = 0;
 int64_t pkt_tx = 0;
 int64_t pkt_drop = 0;
-unsigned short int pkt_stats[65535];
+uint32_t pkt_stats[65536];
 int logtimer = 0;
   
 /**
@@ -163,9 +164,9 @@ void writeLogStats()
         // General Stats
         fprintf(fp,"## GENERAL\nRX:%ld\nTX:%ld\nDROP:%ld\n## PORT STATS\n",(long) pkt_rx, (long) pkt_tx, (long) pkt_drop);
         // port based stats
-        for (int i = 0; i < 65535; i++)
+        for (int i = 0; i < 65536; i++)
           if(pkt_stats[i] > 0)
-            fprintf(fp,"%d:%ld\n",i, (long) pkt_stats[i]);
+            fprintf(fp,"%d:%u\n",i, pkt_stats[i]);
         
         // interface stats
         fprintf(fp,"## IFACE STATS\n");

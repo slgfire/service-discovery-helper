@@ -3,6 +3,8 @@
 
 
 #include <pcap.h>
+#include <signal.h>
+#include <stdint.h>
 
 // Max length of packet to forward
 #define SNAP_LEN 1540
@@ -28,7 +30,7 @@
 //char *iface_list[] = {"eth0", "eth1"};;
 
 // To do: put in conditions for things to exito n
-extern int do_exit ;
+extern volatile sig_atomic_t do_exit ;
 
 // Toggled with -d on command line. Displays debug info. 
 extern int debug ;
