@@ -63,12 +63,18 @@ preflight() {
     fi
     info "Running as root"
 
-    # Check that repo directory looks right
-    if [[ ! -f "$REPO_DIR/Makefile" ]]; then
-        error "Cannot find Makefile in $REPO_DIR — run this script from the deploy/ directory."
+    # Check for pre-built binary (release package) or Makefile (git clone)
+    if [[ -f "$REPO_DIR/sdh-proxy" ]]; then
+        info "Pre-built binary found at $REPO_DIR/sdh-proxy"
+        PREBUILT=1
+    elif [[ -f "$REPO_DIR/Makefile" ]]; then
+        info "Repository found at $REPO_DIR"
+        PREBUILT=0
+    else
+        error "Cannot find sdh-proxy binary or Makefile in $REPO_DIR"
+        error "Run this script from the deploy/ directory inside the extracted package or git repo."
         exit 1
     fi
-    info "Repository found at $REPO_DIR"
 
     # Check for existing installation
     if [[ -f "$PREFIX/bin/sdh-proxy" ]]; then
@@ -374,8 +380,31 @@ main() {
     SKIP_CONFIG=0
 
     preflight
-    install_deps
-    build
+
+    if [[ "$PREBUILT" -eq 0 ]]; then
+        install_deps
+        build
+    else
+        # Ensure runtime dependency (libpcap) is available
+        if ! ldconfig -p 2>/dev/null | grep -q libpcap; then
+            echo -e "${BOLD}── Installing runtime dependencies ──${NC}\n"
+            if command -v apt-get &>/dev/null; then
+                apt-get update -qq && apt-get install -y libpcap0.8
+            elif command -v dnf &>/dev/null; then
+                dnf install -y libpcap
+            elif command -v yum &>/dev/null; then
+                yum install -y libpcap
+            elif command -v pacman &>/dev/null; then
+                pacman -S --needed --noconfirm libpcap
+            elif command -v zypper &>/dev/null; then
+                zypper install -y libpcap1
+            elif command -v apk &>/dev/null; then
+                apk add libpcap
+            else
+                warn "libpcap not found — please install it manually (e.g. apt install libpcap0.8)"
+            fi
+        fi
+    fi
     install_files
 
     if [[ "$SKIP_CONFIG" -eq 0 ]]; then
