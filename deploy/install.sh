@@ -26,6 +26,77 @@ warn()  { echo -e "${YELLOW}[!]${NC} $*"; }
 error() { echo -e "${RED}[✗]${NC} $*"; }
 ask()   { echo -en "${CYAN}[?]${NC} $* "; }
 
+# ── Cleanup on abort ──────────────────────────────────────────────────────
+cleanup() {
+    echo ""
+    warn "Aborted."
+    exit 1
+}
+trap cleanup INT TERM
+
+# ── CLI flags ─────────────────────────────────────────────────────────────
+AUTO_YES=0
+DO_UNINSTALL=0
+
+usage() {
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  -y, --yes            Non-interactive mode (skip all prompts, use defaults)"
+    echo "  --uninstall          Remove sdh-proxy binary, service, and config"
+    echo "  -h, --help           Show this help"
+    exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -y|--yes)       AUTO_YES=1; shift ;;
+        --uninstall)    DO_UNINSTALL=1; shift ;;
+        -h|--help)      usage ;;
+        *)              error "Unknown option: $1"; usage ;;
+    esac
+done
+
+# Helper: prompt user or auto-accept
+# Usage: confirm "question" [default_yes|default_no]
+confirm() {
+    local question="$1"
+    local default="${2:-default_no}"
+
+    if [[ "$AUTO_YES" -eq 1 ]]; then
+        if [[ "$default" == "default_yes" ]]; then
+            return 0
+        else
+            return 1
+        fi
+    fi
+
+    if [[ "$default" == "default_yes" ]]; then
+        ask "$question [Y/n]"
+    else
+        ask "$question [y/N]"
+    fi
+
+    local answer=""
+    read -r answer || true
+    if [[ "$default" == "default_yes" ]]; then
+        [[ ! "$answer" =~ ^[Nn]$ ]]
+    else
+        [[ "$answer" =~ ^[Yy]$ ]]
+    fi
+}
+
+# Helper: read input or return empty in auto mode
+read_input() {
+    local answer=""
+    if [[ "$AUTO_YES" -eq 1 ]]; then
+        echo ""
+        return
+    fi
+    read -r answer || true
+    echo "$answer"
+}
+
 # ── Known game discovery ports ──────────────────────────────────────────────
 declare -A GAME_PORTS=(
     ["Source Engine (TF2, CS:GO, CS:S, HL2DM)"]="27015-27020"
@@ -51,6 +122,58 @@ GAME_NAMES=(
     "Blur"
     "FlatOut 2"
 )
+
+# ── Uninstall ─────────────────────────────────────────────────────────────
+uninstall() {
+    echo -e "\n${BOLD}── Uninstalling sdh-proxy ──${NC}\n"
+
+    if [[ $EUID -ne 0 ]]; then
+        error "This script must be run as root (or with sudo)."
+        exit 1
+    fi
+
+    # Stop and disable service
+    if [[ -d /run/systemd/system ]]; then
+        if systemctl is-active sdh-proxy &>/dev/null; then
+            systemctl stop sdh-proxy
+            info "Service stopped"
+        fi
+        if systemctl is-enabled sdh-proxy &>/dev/null; then
+            systemctl disable sdh-proxy
+            info "Service disabled"
+        fi
+        if [[ -f "$SYSTEMD_UNIT_DIR/sdh-proxy.service" ]]; then
+            rm -f "$SYSTEMD_UNIT_DIR/sdh-proxy.service"
+            systemctl daemon-reload
+            info "Removed $SYSTEMD_UNIT_DIR/sdh-proxy.service"
+        fi
+    fi
+
+    if [[ -f "$PREFIX/bin/sdh-proxy" ]]; then
+        rm -f "$PREFIX/bin/sdh-proxy"
+        info "Removed $PREFIX/bin/sdh-proxy"
+    else
+        warn "Binary not found at $PREFIX/bin/sdh-proxy"
+    fi
+
+    if [[ -f "$CONF_FILE" ]]; then
+        if confirm "Remove config at $CONF_FILE?" "default_no"; then
+            rm -f "$CONF_FILE"
+            info "Removed $CONF_FILE"
+        else
+            info "Kept $CONF_FILE"
+        fi
+        # Also clean up any backup
+        if [[ -f "$CONF_FILE.bak" ]]; then
+            rm -f "$CONF_FILE.bak"
+            info "Removed $CONF_FILE.bak"
+        fi
+    fi
+
+    echo ""
+    echo -e "${GREEN}${BOLD}Uninstall complete.${NC}"
+    echo ""
+}
 
 # ── Pre-flight checks ──────────────────────────────────────────────────────
 preflight() {
@@ -82,9 +205,11 @@ preflight() {
     fi
     if [[ -f "$CONF_FILE" ]]; then
         warn "Existing config found at $CONF_FILE"
-        ask "Overwrite config? [y/N]"
-        read -r overwrite_conf
-        if [[ ! "$overwrite_conf" =~ ^[Yy]$ ]]; then
+        if confirm "Overwrite config?" "default_no"; then
+            # Backup existing config
+            cp "$CONF_FILE" "$CONF_FILE.bak"
+            info "Backup saved to $CONF_FILE.bak"
+        else
             SKIP_CONFIG=1
         fi
     fi
@@ -97,28 +222,22 @@ install_deps() {
     echo -e "${BOLD}── Installing dependencies ──${NC}\n"
 
     if command -v apt-get &>/dev/null; then
-        PKG_MGR="apt-get"
         info "Detected Debian/Ubuntu (apt)"
         apt-get update -qq
         apt-get install -y gcc make libpcap-dev
     elif command -v dnf &>/dev/null; then
-        PKG_MGR="dnf"
         info "Detected Fedora/RHEL (dnf)"
         dnf install -y gcc make libpcap-devel
     elif command -v yum &>/dev/null; then
-        PKG_MGR="yum"
         info "Detected CentOS/RHEL (yum)"
         yum install -y gcc make libpcap-devel
     elif command -v pacman &>/dev/null; then
-        PKG_MGR="pacman"
         info "Detected Arch Linux (pacman)"
         pacman -S --needed --noconfirm gcc make libpcap
     elif command -v zypper &>/dev/null; then
-        PKG_MGR="zypper"
         info "Detected openSUSE (zypper)"
         zypper install -y gcc make libpcap-devel
     elif command -v apk &>/dev/null; then
-        PKG_MGR="apk"
         info "Detected Alpine (apk)"
         apk add gcc make musl-dev libpcap-dev
     else
@@ -151,7 +270,8 @@ select_interfaces() {
     echo -e "${BOLD}── Interface configuration ──${NC}\n"
 
     # List available interfaces (excluding lo)
-    mapfile -t AVAILABLE_IFACES < <(ip -o link show | awk -F': ' '{print $2}' | grep -v '^lo$' | sort)
+    # Use /sys/class/net for reliable names (ip -o link show appends @parent on VLANs)
+    mapfile -t AVAILABLE_IFACES < <(ls /sys/class/net/ | grep -v '^lo$' | sort)
 
     if [[ ${#AVAILABLE_IFACES[@]} -eq 0 ]]; then
         error "No network interfaces found (besides lo)."
@@ -162,19 +282,51 @@ select_interfaces() {
     echo ""
     for i in "${!AVAILABLE_IFACES[@]}"; do
         iface="${AVAILABLE_IFACES[$i]}"
+        # Get link state
+        local state
+        state=$(cat "/sys/class/net/$iface/operstate" 2>/dev/null || echo "unknown")
         # Get IP if assigned
+        local ip_addr
         ip_addr=$(ip -4 addr show "$iface" 2>/dev/null | awk '/inet / {print $2}' | head -1)
-        if [[ -n "$ip_addr" ]]; then
-            echo -e "    ${BOLD}$((i+1)))${NC} $iface  ($ip_addr)"
+
+        local details=""
+        if [[ "$state" != "up" ]]; then
+            details="${YELLOW}${state}${NC}"
+            if [[ -n "$ip_addr" ]]; then
+                details="$details, $ip_addr"
+            fi
+        elif [[ -n "$ip_addr" ]]; then
+            details="$ip_addr"
         else
-            echo -e "    ${BOLD}$((i+1)))${NC} $iface  (no IPv4)"
+            details="no IPv4"
         fi
+        echo -e "    ${BOLD}$((i+1)))${NC} $iface  ($details)"
     done
     echo -e "    ${BOLD}a)${NC} All interfaces"
     echo ""
 
+    if [[ "$AUTO_YES" -eq 1 ]]; then
+        # Non-interactive: select all UP interfaces with IPv4
+        SELECTED_IFACES=()
+        for iface in "${AVAILABLE_IFACES[@]}"; do
+            local state
+            state=$(cat "/sys/class/net/$iface/operstate" 2>/dev/null || echo "unknown")
+            if [[ "$state" == "up" ]]; then
+                SELECTED_IFACES+=("$iface")
+            fi
+        done
+        if [[ ${#SELECTED_IFACES[@]} -lt 2 ]]; then
+            # Fall back to all interfaces if less than 2 are UP
+            SELECTED_IFACES=("${AVAILABLE_IFACES[@]}")
+        fi
+        info "Auto-selected: ${SELECTED_IFACES[*]}"
+        echo ""
+        return
+    fi
+
     ask "Select interfaces (comma-separated numbers, or 'a' for all):"
-    read -r iface_input
+    local iface_input
+    iface_input=$(read_input)
 
     SELECTED_IFACES=()
     if [[ "$iface_input" =~ ^[Aa]$ ]]; then
@@ -193,9 +345,7 @@ select_interfaces() {
 
     if [[ ${#SELECTED_IFACES[@]} -lt 2 ]]; then
         warn "Less than 2 interfaces selected — sdh-proxy needs at least 2 to forward between."
-        ask "Continue anyway? [y/N]"
-        read -r cont
-        if [[ ! "$cont" =~ ^[Yy]$ ]]; then
+        if ! confirm "Continue anyway?" "default_no"; then
             exit 1
         fi
     fi
@@ -207,42 +357,31 @@ select_interfaces() {
 # ── Interactive port/game selection ─────────────────────────────────────────
 select_ports() {
     echo -e "${BOLD}── Port configuration ──${NC}\n"
-    echo "  Known game discovery ports:"
-    echo ""
 
+    # All known game ports are included by default
+    SELECTED_PORTS=()
+    for name in "${GAME_NAMES[@]}"; do
+        SELECTED_PORTS+=("${GAME_PORTS[$name]}")
+    done
+
+    echo "  The following game discovery ports are included by default:"
+    echo ""
     for i in "${!GAME_NAMES[@]}"; do
         name="${GAME_NAMES[$i]}"
         ports="${GAME_PORTS[$name]}"
-        echo -e "    ${BOLD}$((i+1)))${NC} $name  [$ports]"
+        echo -e "    ${GREEN}+${NC} $name  [$ports]"
     done
     echo ""
-    echo -e "    ${BOLD}a)${NC} All of the above"
-    echo ""
 
-    ask "Select games (comma-separated numbers, or 'a' for all):"
-    read -r game_input
-
-    SELECTED_PORTS=()
-    if [[ "$game_input" =~ ^[Aa]$ ]]; then
-        for name in "${GAME_NAMES[@]}"; do
-            SELECTED_PORTS+=("${GAME_PORTS[$name]}")
-        done
-    else
-        IFS=',' read -ra selections <<< "$game_input"
-        for sel in "${selections[@]}"; do
-            sel=$(echo "$sel" | tr -d ' ')
-            if [[ "$sel" =~ ^[0-9]+$ ]] && (( sel >= 1 && sel <= ${#GAME_NAMES[@]} )); then
-                name="${GAME_NAMES[$((sel-1))]}"
-                SELECTED_PORTS+=("${GAME_PORTS[$name]}")
-            else
-                warn "Ignoring invalid selection: $sel"
-            fi
-        done
+    if [[ "$AUTO_YES" -eq 1 ]]; then
+        info "Selected ports: ${SELECTED_PORTS[*]}"
+        echo ""
+        return
     fi
 
-    echo ""
     ask "Additional custom ports? (comma-separated, e.g. '7777,8080-8090', or empty to skip):"
-    read -r custom_ports
+    local custom_ports
+    custom_ports=$(read_input)
     if [[ -n "$custom_ports" ]]; then
         IFS=',' read -ra extras <<< "$custom_ports"
         for p in "${extras[@]}"; do
@@ -255,13 +394,26 @@ select_ports() {
         done
     fi
 
-    if [[ ${#SELECTED_PORTS[@]} -eq 0 ]]; then
-        error "No ports selected. At least one port is required."
-        exit 1
-    fi
-
     info "Selected ports: ${SELECTED_PORTS[*]}"
     echo ""
+}
+
+# ── Summary & confirmation before writing config ──────────────────────────
+confirm_config() {
+    echo -e "${BOLD}── Configuration summary ──${NC}\n"
+
+    echo "  Interfaces:  ${SELECTED_IFACES[*]}"
+    echo "  Ports:       ${SELECTED_PORTS[*]}"
+    echo "  Config file: $CONF_FILE"
+    echo ""
+
+    if ! confirm "Write config?" "default_yes"; then
+        warn "Skipped — config not written. You can create it manually at $CONF_FILE"
+        echo ""
+        return 1
+    fi
+    echo ""
+    return 0
 }
 
 # ── Generate config file ───────────────────────────────────────────────────
@@ -322,15 +474,11 @@ setup_systemd() {
     echo "    sudo systemctl start sdh-proxy"
     echo ""
 
-    ask "Enable sdh-proxy to start on boot? [y/N]"
-    read -r enable_svc
-    if [[ "$enable_svc" =~ ^[Yy]$ ]]; then
+    if confirm "Enable sdh-proxy to start on boot?" "default_no"; then
         systemctl enable sdh-proxy
         info "Service enabled"
 
-        ask "Start sdh-proxy now? [y/N]"
-        read -r start_svc
-        if [[ "$start_svc" =~ ^[Yy]$ ]]; then
+        if confirm "Start sdh-proxy now?" "default_no"; then
             systemctl start sdh-proxy
             info "Service started"
         fi
@@ -371,6 +519,12 @@ verify() {
 
 # ── Main ────────────────────────────────────────────────────────────────────
 main() {
+    # Handle --uninstall early
+    if [[ "$DO_UNINSTALL" -eq 1 ]]; then
+        uninstall
+        exit 0
+    fi
+
     echo ""
     echo -e "${BOLD}╔══════════════════════════════════════════════╗${NC}"
     echo -e "${BOLD}║  Service Discovery Helper — Installer        ║${NC}"
@@ -405,12 +559,33 @@ main() {
             fi
         fi
     fi
-    install_files
+
+    echo -e "${BOLD}── Install ──${NC}\n"
+    echo "  The following will be installed:"
+    echo ""
+    echo "    Binary:   $PREFIX/bin/sdh-proxy"
+    if [[ -d /run/systemd/system ]]; then
+        echo "    Service:  $SYSTEMD_UNIT_DIR/sdh-proxy.service"
+    fi
+    echo ""
+    if confirm "Proceed with installation?" "default_yes"; then
+        echo ""
+        install_files
+    else
+        warn "Skipped — you can install manually:"
+        echo "    cp $REPO_DIR/sdh-proxy $PREFIX/bin/sdh-proxy"
+        if [[ -d /run/systemd/system ]]; then
+            echo "    cp $REPO_DIR/deploy/sdh-proxy.service $SYSTEMD_UNIT_DIR/sdh-proxy.service"
+        fi
+        echo ""
+    fi
 
     if [[ "$SKIP_CONFIG" -eq 0 ]]; then
         select_interfaces
         select_ports
-        generate_config
+        if confirm_config; then
+            generate_config
+        fi
     else
         info "Keeping existing config at $CONF_FILE"
         echo ""
