@@ -46,7 +46,7 @@ jobs:
 
       - name: Package
         run: |
-          tar czf sdh-proxy-linux-${{ matrix.arch }}.tar.gz sdh-proxy config/sdh-proxy.conf.example deploy/sdh-proxy.service deploy/compose.yaml config/ports config/interfaces GAMES.md README.md LICENSE
+          tar czf sdh-proxy-linux-${{ matrix.arch }}.tar.gz sdh-proxy config/sdh-proxy.conf.example deploy/sdh-proxy.service deploy/compose.yaml deploy/install.sh config/ports config/interfaces GAMES.md README.md LICENSE
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -87,8 +87,7 @@ jobs:
 
             ```bash
             tar xzf sdh-proxy-linux-*.tar.gz
-            # Edit 'ports' and 'interfaces' to match your setup
-            sudo ./sdh-proxy -p ports -i interfaces -r
+            sudo ./deploy/install.sh
             ```
 
             ### Requirements
