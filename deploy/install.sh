@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 PREFIX="${PREFIX:-/usr/local}"
-SYSCONFDIR="${SYSCONFDIR:-/etc}"
+SYSCONFDIR="$REPO_DIR"
 SYSTEMD_UNIT_DIR="${SYSTEMD_UNIT_DIR:-/lib/systemd/system}"
 CONF_FILE="$SYSCONFDIR/sdh-proxy.conf"
 
