@@ -75,9 +75,13 @@ char *config_file = NULL;
 int logstat = 0;
 char logstatfile[] = "sdh.stat";
 
-// Does nothing at the moment. Will enable rewriting subnet info if relevant. 
-int do_network_rewrite = 0; // Rewrite IP broadcast address for the new
-                            // network interface
+// Rewrite subnet-directed broadcast destination IPs (e.g. 10.0.0.255) to
+// the limited broadcast address (255.255.255.255) before forwarding, so
+// hosts on other subnets accept the packet. The original tool forwarded
+// directed broadcasts as-is; hosts on other VLANs dropped them at the IP
+// layer because the destination was neither their address nor their local
+// broadcast. Config setting: rewrite_broadcast = yes/no (default: yes).
+int rewrite_broadcast = 1;
 int64_t pkt_rx = 0;
 int64_t pkt_tx = 0;
 int64_t pkt_drop = 0;
@@ -240,19 +244,51 @@ void flood_packet( u_char *source_iface, const struct pcap_pkthdr *header, const
     }
   }
 
-  // Optionally rewrite the IP layer broadcast address to suit the new subnet
-/*  if ( do_network_rewrite > 0)
+  // Rewrite subnet-directed broadcast destination IPs (e.g. 10.0.0.255) to
+  // the limited broadcast address (255.255.255.255). Clients commonly send
+  // discovery broadcasts to their own subnet's broadcast address rather than
+  // 255.255.255.255; forwarded as-is, hosts on other subnets drop the frame
+  // at the IP layer because the destination belongs to a foreign subnet.
+  if (rewrite_broadcast)
   {
-    // This resets the checksum to 0
-    sendpacket[24] = 0x00;
-    sendpacket[25] = 0x00;
-    // Reset broadcast address to 255.255.255.255
-    for (i = 30; i<34; i++)
-      sendpacket[i] = 0xFF;
-    // This isn't actually the packet checksum. One needs to create a pseudo 
-    // header first; I'll do that later. 
-    //printf("Packet checksum: %x\n", in_cksum((unsigned short *)sendpacket, header->len));
-  }*/
+    const unsigned int ip_hdr_len =
+        (unsigned int)(sendpacket[ETH_HDR_LENGTH] & 0x0F) * 4;
+    const size_t dst_ip_off = ETH_HDR_LENGTH + 16;
+
+    if (ip_hdr_len >= 20 &&
+        header->len >= (bpf_u_int32)(ETH_HDR_LENGTH + ip_hdr_len + 8) &&
+        (sendpacket[dst_ip_off]   != 0xFF ||
+         sendpacket[dst_ip_off+1] != 0xFF ||
+         sendpacket[dst_ip_off+2] != 0xFF ||
+         sendpacket[dst_ip_off+3] != 0xFF))
+    {
+      // Destination is a subnet-directed broadcast: rewrite it
+      sendpacket[dst_ip_off]   = 0xFF;
+      sendpacket[dst_ip_off+1] = 0xFF;
+      sendpacket[dst_ip_off+2] = 0xFF;
+      sendpacket[dst_ip_off+3] = 0xFF;
+
+      // Recompute the IP header checksum over the modified header.
+      // in_cksum() (RFC1071) returns the checksum as a native-endian value,
+      // so it must be stored as a native u16 (memcpy), not bytewise
+      // big-endian, or the field ends up byte-swapped and invalid.
+      sendpacket[ETH_HDR_LENGTH+10] = 0x00;
+      sendpacket[ETH_HDR_LENGTH+11] = 0x00;
+      {
+        unsigned short cksum =
+            in_cksum((unsigned short *)(sendpacket+ETH_HDR_LENGTH), ip_hdr_len);
+        memcpy(&sendpacket[ETH_HDR_LENGTH+10], &cksum, sizeof(cksum));
+      }
+
+      // The UDP checksum covers the (now changed) destination IP; a zero
+      // UDP checksum means "not computed" and is accepted by every stack.
+      sendpacket[ETH_HDR_LENGTH + ip_hdr_len + 6] = 0x00;
+      sendpacket[ETH_HDR_LENGTH + ip_hdr_len + 7] = 0x00;
+
+      if (debug)
+        sdh_log(SDH_LOG_DEBUG, "Rewrote directed broadcast destination to 255.255.255.255");
+    }
+  }
 
   for (i = 0; i < num_ifaces; i++)
   {

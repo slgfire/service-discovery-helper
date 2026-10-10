@@ -22,6 +22,7 @@ Running a LAN party with hundreds of PCs on one broadcast domain doesn't scale. 
 
 - **Selective forwarding** — only whitelisted UDP ports are forwarded, no accidental DHCP or SSDP leaks
 - **Rate limiting** — optional per-source-IP+port rate limiter prevents broadcast storms and loops
+- **Directed broadcast rewriting** — subnet-directed broadcasts (e.g. `10.0.0.255`) are rewritten to the global broadcast address (`255.255.255.255`) on forwarded packets, so they are accepted on VLANs with different subnets
 - **Multi-architecture** — pre-built binaries for x86_64, ARM64 and ARM 32-bit (Raspberry Pi)
 - **Auto-detect interfaces** — use `-a` to listen on all available network interfaces
 - **Stat logging** — optional packet statistics to file for InfluxDB ingestion
@@ -158,6 +159,7 @@ eth0.102
 # Key = value pairs for runtime options
 rate_limit = yes
 rate_limit_timeout = 750
+rewrite_broadcast = yes
 log_stats = no
 syslog = no
 debug = no
@@ -242,6 +244,8 @@ This is a fork of [SirSquidness/service-discovery-helper](https://github.com/Sir
 - **Bugfix:** `fclose()` crash when stat log file couldn't be opened
 - **Bugfix:** Off-by-one memory allocation when auto-detecting interfaces (`-a`), could cause memory corruption
 - **Bugfix:** Filter string buffer dynamically sized instead of hardcoded 10KB — fixes segfault with large port lists
+- **Bugfix:** Subnet-directed broadcasts (e.g. `10.0.0.255`) are now rewritten to `255.255.255.255` on forwarded packets (`rewrite_broadcast`, on by default). Previously packets were forwarded unchanged, so hosts on VLANs with different subnets silently dropped them — the long-standing "doesn't work across VLANs" limitation of the original
+- **Bugfix:** `install.sh` now writes the generated config to `/etc/sdh-proxy.conf` (like `make install` and the systemd unit expect) instead of leaving it in the source directory
 - **CI/CD:** GitHub Actions workflows for automated builds on x86_64, ARM64 and ARM 32-bit
 - **Releases:** Pre-built binaries available for download
 - **Config file:** Single config file support (`-c` flag) with auto-discovery of `/etc/sdh-proxy.conf`

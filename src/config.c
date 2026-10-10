@@ -16,6 +16,7 @@ extern int num_ports;
 extern int debug;
 extern int logstat;
 extern int sdh_log_debug_enabled;
+extern int rewrite_broadcast;
 
 typedef enum {
     SECTION_NONE,
@@ -170,6 +171,17 @@ int sdh_config_load(const char *path)
                 pkt_timeout_s = ms / 1000;
                 pkt_timeout_us = (ms % 1000) * 1000;
                 timer_enabled = 1;
+            }
+            else if (strcmp(key, "rewrite_broadcast") == 0)
+            {
+                int v = parse_yes_no(val);
+                if (v < 0)
+                {
+                    sdh_log(SDH_LOG_ERROR, "Config line %d: rewrite_broadcast expects yes/no", lineno);
+                    fclose(fp);
+                    return -1;
+                }
+                rewrite_broadcast = v;
             }
             else if (strcmp(key, "log_stats") == 0)
             {

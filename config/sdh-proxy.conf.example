@@ -15,16 +15,30 @@ eth1
 27015-27020
 27005
 
-# Warcraft 3
+# Warcraft 3 / Blizzard classics
+6111
 6112
 
-# Steam
+# Steam (server browser + In-Home Streaming)
 26900-26905
+4242
 27036
+
+# Call of Duty 2/4
+28960-28973
+
+# Unreal Tournament 99 / UT2004
+8777-8786
+10777
 
 [settings]
 # Enable rate limiting (strongly recommended)
 rate_limit = yes
+
+# Rewrite subnet-directed broadcasts (e.g. 10.0.0.255) to 255.255.255.255
+# on forwarded packets. Required when VLANs use different subnets — hosts
+# would otherwise drop packets addressed to a foreign subnet broadcast.
+rewrite_broadcast = yes
 
 # Rate limit timeout in milliseconds
 rate_limit_timeout = 1000

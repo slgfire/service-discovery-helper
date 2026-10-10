@@ -32,8 +32,13 @@
 // To do: put in conditions for things to exito n
 extern volatile sig_atomic_t do_exit ;
 
-// Toggled with -d on command line. Displays debug info. 
+// Toggled with -d on command line. Displays debug info.
 extern int debug ;
+
+// Rewrite subnet-directed broadcast destination IPs (e.g. 10.0.0.255) to
+// 255.255.255.255 before forwarding to other interfaces. Set via the
+// rewrite_broadcast setting in the config file. Default: enabled.
+extern int rewrite_broadcast ;
 
   
 /**

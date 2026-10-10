@@ -9,7 +9,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 PREFIX="${PREFIX:-/usr/local}"
-SYSCONFDIR="$REPO_DIR"
+# Config lives in SYSCONFDIR — this must match the ExecStart path in
+# sdh-proxy.service (-c /etc/sdh-proxy.conf) and the Makefile's SYSCONFDIR,
+# otherwise the service reads a different config than the one this script
+# generates.
+SYSCONFDIR="${SYSCONFDIR:-/etc}"
 SYSTEMD_UNIT_DIR="${SYSTEMD_UNIT_DIR:-/lib/systemd/system}"
 CONF_FILE="$SYSCONFDIR/sdh-proxy.conf"
 
@@ -98,29 +102,49 @@ read_input() {
 }
 
 # ── Known game discovery ports ──────────────────────────────────────────────
+# Values may contain multiple space-separated ports/ranges; they are split
+# into one config line per entry when the config is written.
 declare -A GAME_PORTS=(
-    ["Source Engine (TF2, CS:GO, CS:S, HL2DM)"]="27015-27020"
-    ["Steam Client"]="27036"
-    ["Warcraft 3 / Frozen Throne"]="6112"
-    ["ARMA 2 / DayZ"]="2302-2470"
-    ["Trackmania / Shootmania"]="2350-2360"
-    ["Unreal Tournament 2004"]="10777"
-    ["Warsow"]="44400"
+    ["ARMA 2 / DayZ"]="2302 2314 2326 2338 2350 2362 2374 2386 2398 2410 2422 2434 2446 2458 2470"
+    ["Blobby Volley"]="1700-1800 2300-2400 2600-2800 47624"
     ["Blur"]="50001"
+    ["Call of Duty 2/4"]="28960-28973"
     ["FlatOut 2"]="23757"
+    ["Q3 Arena"]="27960-27963"
+    ["Rainbow Six Siege (untested)"]="3074 49509"
+    ["Serious Sam"]="25600-25601"
+    ["Source Engine (TF2, CS:GO, CS:S, HL2DM)"]="27015-27020 27005"
+    ["Star Wars JediKnight"]="28070"
+    ["Steam (server browser + In-Home Streaming)"]="26900-26905 4242 27036"
+    ["TeeWorlds"]="8300-8305"
+    ["Trackmania Forever / Maniaplanet"]="2350-2370"
+    ["Trackmania 2020"]="3450 5005"
+    ["Unreal Tournament 99"]="8777-8786"
+    ["Unreal Tournament 2004"]="10777"
+    ["Warcraft 3 / Blizzard Classics"]="6111 6112"
+    ["Warsow"]="44400"
 )
 
 # Ordered list of game names for consistent display
 GAME_NAMES=(
-    "Source Engine (TF2, CS:GO, CS:S, HL2DM)"
-    "Steam Client"
-    "Warcraft 3 / Frozen Throne"
     "ARMA 2 / DayZ"
-    "Trackmania / Shootmania"
-    "Unreal Tournament 2004"
-    "Warsow"
+    "Blobby Volley"
     "Blur"
+    "Call of Duty 2/4"
     "FlatOut 2"
+    "Q3 Arena"
+    "Rainbow Six Siege (untested)"
+    "Serious Sam"
+    "Source Engine (TF2, CS:GO, CS:S, HL2DM)"
+    "Star Wars JediKnight"
+    "Steam (server browser + In-Home Streaming)"
+    "TeeWorlds"
+    "Trackmania Forever / Maniaplanet"
+    "Trackmania 2020"
+    "Unreal Tournament 99"
+    "Unreal Tournament 2004"
+    "Warcraft 3 / Blizzard Classics"
+    "Warsow"
 )
 
 # ── Uninstall ─────────────────────────────────────────────────────────────
@@ -361,7 +385,10 @@ select_ports() {
     # All known game ports are included by default
     SELECTED_PORTS=()
     for name in "${GAME_NAMES[@]}"; do
-        SELECTED_PORTS+=("${GAME_PORTS[$name]}")
+        # Values may contain multiple space-separated ports/ranges
+        for p in ${GAME_PORTS[$name]}; do
+            SELECTED_PORTS+=("$p")
+        done
     done
 
     echo "  The following game discovery ports are included by default:"
@@ -433,6 +460,7 @@ $(printf '%s\n' "${SELECTED_PORTS[@]}")
 [settings]
 rate_limit = yes
 rate_limit_timeout = 1000
+rewrite_broadcast = yes
 log_stats = no
 syslog = no
 debug = no
