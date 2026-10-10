@@ -2,8 +2,10 @@
 set -euo pipefail
 
 # Service Discovery Helper — Install Script
-# Installs dependencies, builds sdh-proxy, generates config interactively,
-# and optionally sets up systemd.
+# Installs the pre-built sdh-proxy binary, generates the config
+# interactively, and optionally sets up systemd.
+# (To install from source, run "make" in the repo root first — this script
+#  then picks up the binary you built.)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
@@ -210,16 +212,15 @@ preflight() {
     fi
     info "Running as root"
 
-    # Check for pre-built binary (release package) or Makefile (git clone)
+    # A pre-built binary is required — release tarballs ship one at the
+    # repo root, and "make" puts one there when building from source.
     if [[ -f "$REPO_DIR/sdh-proxy" ]]; then
         info "Pre-built binary found at $REPO_DIR/sdh-proxy"
-        PREBUILT=1
-    elif [[ -f "$REPO_DIR/Makefile" ]]; then
-        info "Repository found at $REPO_DIR"
-        PREBUILT=0
     else
-        error "Cannot find sdh-proxy binary or Makefile in $REPO_DIR"
-        error "Run this script from the deploy/ directory inside the extracted package or git repo."
+        error "No sdh-proxy binary found in $REPO_DIR"
+        error "Either download a release tarball (it includes the binary):"
+        error "  https://github.com/slgfire/service-discovery-helper/releases"
+        error "or build from source with 'make' and re-run this script."
         exit 1
     fi
 
@@ -241,51 +242,31 @@ preflight() {
     echo ""
 }
 
-# ── Detect package manager and install dependencies ─────────────────────────
-install_deps() {
-    echo -e "${BOLD}── Installing dependencies ──${NC}\n"
+# ── Ensure the libpcap runtime library is present ───────────────────────────
+install_runtime_deps() {
+    if ldconfig -p 2>/dev/null | grep -q libpcap; then
+        info "libpcap runtime library found"
+        return
+    fi
+
+    echo -e "${BOLD}── Installing runtime dependencies (libpcap) ──${NC}\n"
 
     if command -v apt-get &>/dev/null; then
-        info "Detected Debian/Ubuntu (apt)"
-        apt-get update -qq
-        apt-get install -y gcc make libpcap-dev
+        apt-get update -qq && apt-get install -y libpcap0.8
     elif command -v dnf &>/dev/null; then
-        info "Detected Fedora/RHEL (dnf)"
-        dnf install -y gcc make libpcap-devel
+        dnf install -y libpcap
     elif command -v yum &>/dev/null; then
-        info "Detected CentOS/RHEL (yum)"
-        yum install -y gcc make libpcap-devel
+        yum install -y libpcap
     elif command -v pacman &>/dev/null; then
-        info "Detected Arch Linux (pacman)"
-        pacman -S --needed --noconfirm gcc make libpcap
+        pacman -S --needed --noconfirm libpcap
     elif command -v zypper &>/dev/null; then
-        info "Detected openSUSE (zypper)"
-        zypper install -y gcc make libpcap-devel
+        zypper install -y libpcap1
     elif command -v apk &>/dev/null; then
-        info "Detected Alpine (apk)"
-        apk add gcc make musl-dev libpcap-dev
+        apk add libpcap
     else
-        error "Could not detect package manager. Please install manually: gcc, make, libpcap-dev"
-        exit 1
+        warn "libpcap not found — please install it manually (e.g. apt install libpcap0.8)"
     fi
 
-    info "Dependencies installed"
-    echo ""
-}
-
-# ── Build ───────────────────────────────────────────────────────────────────
-build() {
-    echo -e "${BOLD}── Building sdh-proxy ──${NC}\n"
-
-    make -C "$REPO_DIR" clean 2>/dev/null || true
-    make -C "$REPO_DIR"
-
-    if [[ ! -f "$REPO_DIR/sdh-proxy" ]]; then
-        error "Build failed — sdh-proxy binary not found."
-        exit 1
-    fi
-
-    info "Build successful"
     echo ""
 }
 
@@ -563,30 +544,7 @@ main() {
 
     preflight
 
-    if [[ "$PREBUILT" -eq 0 ]]; then
-        install_deps
-        build
-    else
-        # Ensure runtime dependency (libpcap) is available
-        if ! ldconfig -p 2>/dev/null | grep -q libpcap; then
-            echo -e "${BOLD}── Installing runtime dependencies ──${NC}\n"
-            if command -v apt-get &>/dev/null; then
-                apt-get update -qq && apt-get install -y libpcap0.8
-            elif command -v dnf &>/dev/null; then
-                dnf install -y libpcap
-            elif command -v yum &>/dev/null; then
-                yum install -y libpcap
-            elif command -v pacman &>/dev/null; then
-                pacman -S --needed --noconfirm libpcap
-            elif command -v zypper &>/dev/null; then
-                zypper install -y libpcap1
-            elif command -v apk &>/dev/null; then
-                apk add libpcap
-            else
-                warn "libpcap not found — please install it manually (e.g. apt install libpcap0.8)"
-            fi
-        fi
-    fi
+    install_runtime_deps
 
     echo -e "${BOLD}── Install ──${NC}\n"
     echo "  The following will be installed:"

@@ -28,7 +28,7 @@ Requires root (or pcap capture privileges).
 ```
 src/            C source code (sdh-proxy, timer, log, config)
 config/         Configuration files (ports, interfaces, sdh-proxy.conf.example)
-deploy/         Deployment files (Dockerfile, compose.yaml, sdh-proxy.service)
+deploy/         Deployment files (sdh-proxy.service, install.sh)
 lib/uthash/     Vendored header-only hash table library
 .github/        CI/CD workflows
 ```
@@ -52,5 +52,5 @@ lib/uthash/     Vendored header-only hash table library
 
 ## Branches
 
-- `master` — stable v1.x release
-- `v2.0` — v2.0 with config file, logging, signal handling, Docker, systemd
+- `v2.0` — active development branch (config file, logging, signal handling, systemd)
+- `master` — kept in sync with v2.0 (same commit)

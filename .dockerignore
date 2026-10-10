@@ -1,6 +1,0 @@
-.git
-.github
-CLAUDE.md
-*.o
-sdh-proxy
-deploy/compose.yaml

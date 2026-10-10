@@ -42,8 +42,18 @@ Download from the [Releases page](https://github.com/slgfire/service-discovery-h
 
 ```bash
 tar xzf sdh-proxy-linux-*.tar.gz
+sudo ./deploy/install.sh          # guided setup: binary, config, systemd
+```
+
+The installer detects your interfaces, lets you pick game ports, generates
+`/etc/sdh-proxy.conf` and sets up the systemd service. It installs the
+libpcap runtime automatically if it is missing.
+
+Prefer running it manually?
+
+```bash
 sudo apt install libpcap0.8       # runtime dependency (all platforms)
-sudo ./sdh-proxy -p ports -i interfaces -r
+sudo ./sdh-proxy -p config/ports -i config/interfaces -r
 ```
 
 ### Build from source
@@ -51,7 +61,9 @@ sudo ./sdh-proxy -p ports -i interfaces -r
 ```bash
 sudo apt install build-essential libpcap-dev
 make
-sudo ./sdh-proxy -p ports -i interfaces -r
+sudo ./deploy/install.sh          # picks up the binary you just built
+# — or run it directly:
+sudo ./sdh-proxy -p config/ports -i config/interfaces -r
 ```
 
 ## ⚙️ Usage
@@ -177,7 +189,7 @@ Lines starting with `#` are comments. The `[interfaces]` and `[ports]` sections 
 
 ## 🔄 Running as a Service
 
-Install and enable as a systemd service:
+The release installer (`sudo ./deploy/install.sh`) sets all of this up for you. From source:
 
 ```bash
 sudo make install
@@ -189,26 +201,6 @@ sudo systemctl enable --now sdh-proxy
 Check status: `sudo systemctl status sdh-proxy`
 
 View logs: `journalctl -u sdh-proxy -f`
-
-## 🐳 Docker
-
-```bash
-docker run -d --net=host \
-  -v /path/to/your/sdh-proxy.conf:/etc/sdh-proxy.conf \
-  ghcr.io/slgfire/service-discovery-helper:latest
-```
-
-Requires `--net=host` for access to the host's network interfaces. Mount your config file to `/etc/sdh-proxy.conf`.
-
-Or use Docker Compose (`compose.yaml` is included in the repo):
-
-```bash
-cp sdh-proxy.conf.example sdh-proxy.conf
-# Edit sdh-proxy.conf to match your setup
-docker compose up -d
-```
-
-Multi-arch images are available for x86_64, ARM64, and ARM 32-bit.
 
 ## 📊 Stat Logging
 
@@ -253,7 +245,7 @@ This is a fork of [SirSquidness/service-discovery-helper](https://github.com/Sir
 - **Thread safety:** Atomic operations for packet counters
 - **Centralized logging:** Log levels (ERROR/INFO/DEBUG) with stdout and syslog backends
 - **Systemd:** Service file for running as a system daemon
-- **Docker:** Multi-arch container image on GitHub Container Registry
+- **Installer:** guided `deploy/install.sh` — installs the pre-built release binary, generates the config and sets up systemd; no compiler toolchain needed on the target machine
 - **Makefile:** `make install` / `make uninstall` targets
 
 ## 📄 License
